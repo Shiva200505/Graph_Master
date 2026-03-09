@@ -43,6 +43,52 @@ export default function HomePage() {
   const { setDealer } = useCartStore();
   const [selected, setSelected] = useState('');
   const [loading, setLoading] = useState(false);
+  const [geoLocating, setGeoLocating] = useState(false);
+  const [geoError, setGeoError] = useState('');
+
+  // Auto-detect location via browser GPS then snap to nearest city
+  const autoDetectLocation = () => {
+    if (!navigator.geolocation) {
+      setGeoError('Geolocation not supported by your browser');
+      return;
+    }
+    setGeoLocating(true);
+    setGeoError('');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        // Snap to nearest known city using Haversine distance
+        let nearestLoc = LOCATIONS[0];
+        let minDist = Infinity;
+        for (const loc of LOCATIONS) {
+          const dLat = (loc.lat - latitude) * (Math.PI / 180);
+          const dLng = (loc.lng - longitude) * (Math.PI / 180);
+          const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(latitude * Math.PI / 180) * Math.cos(loc.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+          const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          if (dist < minDist) { minDist = dist; nearestLoc = loc; }
+        }
+        // Use exact GPS coords but city name from nearest match
+        setSelected(nearestLoc.name);
+        setLoading(true);
+        setLocation(latitude, longitude, nearestLoc.name);
+        try {
+          const res = await fetch(`/api/dealers/nearest?lat=${latitude}&lng=${longitude}`);
+          const data = await res.json();
+          if (data.dealer) {
+            setNearestDealer({ id: data.dealer.id, name: data.dealer.name, distance: data.dealer.distanceKm });
+            setDealer(data.dealer.id, data.dealer.name);
+          }
+        } catch { /* ignore */ }
+        finally { setLoading(false); setGeoLocating(false); }
+      },
+      (err) => {
+        setGeoLocating(false);
+        setGeoError(err.code === 1 ? 'Please allow location access and try again' : 'Could not detect location');
+      },
+      { timeout: 8000, maximumAge: 60000 }
+    );
+  };
 
   const handleLocation = async (loc: typeof LOCATIONS[0]) => {
     if (selected === loc.name) {
@@ -138,7 +184,31 @@ export default function HomePage() {
                   {selected ? `${selected} ✓` : 'Choose your city'}
                 </div>
               </div>
-              <div style={{ flex: 1, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* GPS auto-detect button */}
+                <button
+                  onClick={autoDetectLocation}
+                  disabled={geoLocating || loading}
+                  title="Auto-detect my GPS location"
+                  style={{
+                    padding: '0.45rem 0.875rem', borderRadius: '8px',
+                    border: '1px solid rgba(82,176,97,0.5)',
+                    background: geoLocating ? 'rgba(82,176,97,0.15)' : 'rgba(82,176,97,0.1)',
+                    color: '#7ECB8C', fontWeight: 700, fontSize: '0.82rem',
+                    cursor: geoLocating ? 'wait' : 'pointer', transition: 'all 0.15s',
+                    display: 'flex', alignItems: 'center', gap: '0.35rem',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {geoLocating ? (
+                    <><span style={{ width: '10px', height: '10px', border: '2px solid rgba(126,203,140,0.3)', borderTop: '2px solid #7ECB8C', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} /> Detecting…</>
+                  ) : (
+                    <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg> Detect My Location</>
+                  )}
+                </button>
+
+                {/* Divider */}
+                <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.75rem', userSelect: 'none' }}>or</span>
                 {LOCATIONS.map((loc) => {
                   const isSelected = selected === loc.name;
                   return (
@@ -160,6 +230,11 @@ export default function HomePage() {
                   );
                 })}
               </div>
+              {/* Geo error */}
+              {geoError && (
+                <div style={{ width: '100%', fontSize: '0.75rem', color: '#FCA5A5', marginTop: '0.25rem', paddingLeft: '0.25rem' }}>⚠ {geoError}</div>
+              )}
+
               <button
                 className="btn btn-harvest"
                 onClick={() => router.push('/products')}

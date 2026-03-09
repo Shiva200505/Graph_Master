@@ -29,35 +29,36 @@ async function main() {
   });
   console.log('✅ Admin created: admin@grapemaster.com / admin123');
 
-  // ─── 2. Dealers (with PostGIS location) ────────────────────────────────────
+  // ─── 2. Dealers (with PostGIS location + login password) ───────────────────
+  const dealerPassword = await bcrypt.hash('dealer123', 10);
   await prisma.$executeRaw`
-    INSERT INTO dealers (id, name, phone, email, address, location, coverage_radius_km, is_active, created_at, updated_at)
+    INSERT INTO dealers (id, name, phone, email, password_hash, address, location, coverage_radius_km, is_active, created_at, updated_at)
     VALUES (
-      gen_random_uuid(), 'Shivaji Agro Center', '+919876543210', 'shivaji@agro.com',
+      gen_random_uuid(), 'Shivaji Agro Center', '+919876543210', 'shivaji@agro.com', ${dealerPassword},
       'Main Road, Shirur, Pune, Maharashtra 412210',
       ST_SetSRID(ST_MakePoint(74.3789, 18.8324), 4326)::geography,
       15.0, true, NOW(), NOW()
-    ) ON CONFLICT DO NOTHING
+    ) ON CONFLICT (email) DO UPDATE SET password_hash = ${dealerPassword}
   `;
   await prisma.$executeRaw`
-    INSERT INTO dealers (id, name, phone, email, address, location, coverage_radius_km, is_active, created_at, updated_at)
+    INSERT INTO dealers (id, name, phone, email, password_hash, address, location, coverage_radius_km, is_active, created_at, updated_at)
     VALUES (
-      gen_random_uuid(), 'Krushna Seeds & Fertilizers', '+919876543211', 'krushna@seeds.com',
+      gen_random_uuid(), 'Krushna Seeds & Fertilizers', '+919876543211', 'krushna@seeds.com', ${dealerPassword},
       'Pune-Nagar Road, Pune, Maharashtra 411014',
       ST_SetSRID(ST_MakePoint(73.8567, 18.5204), 4326)::geography,
       20.0, true, NOW(), NOW()
-    ) ON CONFLICT DO NOTHING
+    ) ON CONFLICT (email) DO UPDATE SET password_hash = ${dealerPassword}
   `;
   await prisma.$executeRaw`
-    INSERT INTO dealers (id, name, phone, email, address, location, coverage_radius_km, is_active, created_at, updated_at)
+    INSERT INTO dealers (id, name, phone, email, password_hash, address, location, coverage_radius_km, is_active, created_at, updated_at)
     VALUES (
-      gen_random_uuid(), 'Nashik Agri Supplies', '+919876543212', 'nashik@agri.com',
+      gen_random_uuid(), 'Nashik Agri Supplies', '+919876543212', 'nashik@agri.com', ${dealerPassword},
       'CBS Road, Nashik, Maharashtra 422001',
       ST_SetSRID(ST_MakePoint(73.7898, 19.9975), 4326)::geography,
       25.0, true, NOW(), NOW()
-    ) ON CONFLICT DO NOTHING
+    ) ON CONFLICT (email) DO UPDATE SET password_hash = ${dealerPassword}
   `;
-  console.log('✅ Dealers created: 3');
+  console.log('✅ Dealers created/updated with passwords (dealer123)');
 
   // ─── 3. Products ───────────────────────────────────────────────────────────
   const productData = [
@@ -126,6 +127,11 @@ async function main() {
   console.log('Admin Login:');
   console.log('  Email:    admin@grapemaster.com');
   console.log('  Password: admin123');
+  console.log('─────────────────────────────────');
+  console.log('Dealer Logins (password: dealer123):');
+  console.log('  shivaji@agro.com');
+  console.log('  krushna@seeds.com');
+  console.log('  nashik@agri.com');
   console.log('─────────────────────────────────');
 }
 

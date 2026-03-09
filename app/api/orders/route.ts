@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@/app/generated/prisma';
+import { haversineKm, calcDeliveryCharge } from '@/lib/haversine';
+import { notifyOrderPlaced } from '@/lib/notify';
 
 function getClient() {
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -12,7 +14,11 @@ function getClient() {
 // POST /api/orders — create a new order
 export async function POST(req: NextRequest) {
     const body = await req.json();
-    const { dealerId, customerName, customerPhone, deliveryAddress, fulfillmentType, items, userId } = body;
+    const {
+        dealerId, customerName, customerPhone, deliveryAddress,
+        fulfillmentType, items, userId,
+        userLat, userLng,   // ← new: user's coordinates for distance-based delivery
+    } = body;
 
     if (!dealerId || !customerName || !customerPhone || !deliveryAddress || !items?.length) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -23,12 +29,38 @@ export async function POST(req: NextRequest) {
         // Generate order number
         const orderNumber = `GM${Date.now().toString().slice(-8)}`;
 
-        // Calculate totals
+        // Calculate subtotal
         let subtotal = 0;
         for (const item of items) {
             subtotal += item.unitPrice * item.quantity;
         }
-        const deliveryCharge = fulfillmentType === 'delivery' && subtotal < 2000 ? 50 : 0;
+
+        // ── Distance-based delivery charge ────────────────────────────────────
+        let deliveryCharge = 0;
+        let distanceKm: number | null = null;
+        let dealerLat: number | null = null;
+        let dealerLng: number | null = null;
+
+        if (fulfillmentType === 'delivery') {
+            // Fetch dealer coordinates from PostGIS
+            const locResult = await prisma.$queryRaw<{ dlat: number; dlng: number }[]>`
+                SELECT ST_Y(location::geometry) AS dlat, ST_X(location::geometry) AS dlng
+                FROM dealers WHERE id = ${dealerId}::uuid LIMIT 1
+            `;
+            if (locResult.length && locResult[0].dlat != null) {
+                dealerLat = locResult[0].dlat;
+                dealerLng = locResult[0].dlng;
+            }
+
+            if (userLat && userLng && dealerLat && dealerLng) {
+                distanceKm = Math.round(haversineKm(userLat, userLng, dealerLat, dealerLng) * 10) / 10;
+                deliveryCharge = calcDeliveryCharge(distanceKm, subtotal, 'delivery');
+            } else {
+                // Fallback: flat rate if coordinates not available
+                deliveryCharge = subtotal >= 2000 ? 0 : 50;
+            }
+        }
+
         const total = subtotal + deliveryCharge;
 
         // Create order + items in transaction + deduct inventory
@@ -63,7 +95,10 @@ export async function POST(req: NextRequest) {
                     status: 'pending',
                     paymentStatus: 'pending',
                     items: {
-                        create: items.map((item: { productId?: string; productName: string; unit: string; unitPrice: number; quantity: number; subtotal: number }) => ({
+                        create: items.map((item: {
+                            productId?: string; productName: string; unit: string;
+                            unitPrice: number; quantity: number; subtotal: number
+                        }) => ({
                             productId: item.productId ?? null,
                             productName: item.productName,
                             unit: item.unit,
@@ -73,13 +108,37 @@ export async function POST(req: NextRequest) {
                         })),
                     },
                 },
-                include: { items: true },
+                include: {
+                    items: true,
+                    dealer: { select: { name: true } },
+                },
             });
 
             return newOrder;
         });
 
-        return NextResponse.json({ order, success: true }, { status: 201 });
+        // ── Notifications (non-blocking) ──────────────────────────────────────
+        notifyOrderPlaced({
+            orderNumber: order.orderNumber,
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            dealerName: order.dealer.name,
+            items: order.items.map((i) => ({
+                productName: i.productName,
+                quantity: i.quantity,
+                unitPrice: Number(i.unitPrice),
+            })),
+            total: Number(order.total),
+            fulfillmentType: order.fulfillmentType as 'pickup' | 'delivery',
+            deliveryAddress: order.deliveryAddress,
+            orderId: order.id,
+        }).catch((e) => console.error('[notify] Error:', e));
+
+        return NextResponse.json({
+            order: { ...order, distanceKm },
+            success: true,
+        }, { status: 201 });
+
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to create order';
         console.error('[API/orders POST]', err);

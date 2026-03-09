@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { useLocationStore } from '@/store/locationStore';
@@ -13,17 +13,48 @@ interface FormData {
 
 export default function CheckoutPage() {
     const router = useRouter();
-    const { items, dealerId, dealerName, fulfillmentType, setFulfillmentType, subtotal, deliveryCharge, total, clearCart } = useCartStore();
-    const { locationName } = useLocationStore();
+    const { items, dealerId, dealerName, fulfillmentType, setFulfillmentType, subtotal, clearCart } = useCartStore();
+    const { locationName, lat: userLat, lng: userLng } = useLocationStore();
 
     const [form, setForm] = useState<FormData>({ name: '', phone: '', address: '' });
     const [errors, setErrors] = useState<Partial<FormData>>({});
     const [placing, setPlacing] = useState(false);
     const [apiError, setApiError] = useState('');
 
+    // ── Dynamic delivery charge state ──────────────────────────────────────────
+    const [deliveryCharge, setDeliveryCharge] = useState(0);
+    const [distanceKm, setDistanceKm] = useState<number | null>(null);
+    const [chargeLoading, setChargeLoading] = useState(false);
+
     const sub = subtotal();
-    const delivery = deliveryCharge();
-    const tot = total();
+    const total = sub + deliveryCharge;
+
+    // Fetch live delivery charge from API
+    const fetchDeliveryCharge = useCallback(async () => {
+        if (fulfillmentType === 'pickup') { setDeliveryCharge(0); setDistanceKm(null); return; }
+        if (!dealerId || !userLat || !userLng) {
+            // Fallback: simple flat rate
+            setDeliveryCharge(sub >= 2000 ? 0 : 50);
+            return;
+        }
+        setChargeLoading(true);
+        try {
+            const params = new URLSearchParams({
+                dealerId, lat: String(userLat), lng: String(userLng),
+                subtotal: String(sub), fulfillmentType,
+            });
+            const res = await fetch(`/api/delivery-charge?${params}`);
+            const data = await res.json();
+            setDeliveryCharge(data.charge ?? 0);
+            setDistanceKm(data.distanceKm ?? null);
+        } catch {
+            setDeliveryCharge(sub >= 2000 ? 0 : 50);
+        } finally {
+            setChargeLoading(false);
+        }
+    }, [fulfillmentType, dealerId, userLat, userLng, sub]);
+
+    useEffect(() => { fetchDeliveryCharge(); }, [fetchDeliveryCharge]);
 
     const validate = () => {
         const e: Partial<FormData> = {};
@@ -46,7 +77,8 @@ export default function CheckoutPage() {
         setPlacing(true);
         setApiError('');
         try {
-            const res = await fetch('/api/orders', {
+            // Initiate PhonePe payment — creates order with pending_payment status
+            const res = await fetch('/api/payments/initiate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -55,6 +87,8 @@ export default function CheckoutPage() {
                     customerPhone: form.phone.trim(),
                     deliveryAddress: getAddress(),
                     fulfillmentType,
+                    userLat,
+                    userLng,
                     items: items.map((i) => ({
                         inventoryId: i.inventoryId,
                         productId: i.productId,
@@ -68,11 +102,12 @@ export default function CheckoutPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error ?? 'Order failed');
+
+            // Clear cart then redirect to PhonePe payment page
             clearCart();
-            router.push(`/order/${data.order.id}`);
+            window.location.href = data.redirectUrl;
         } catch (err: unknown) {
             setApiError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
-        } finally {
             setPlacing(false);
         }
     };
@@ -98,14 +133,10 @@ export default function CheckoutPage() {
                 <div className="container">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <a href="/products" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--gray-500)', textDecoration: 'none', fontSize: '0.85rem' }}>
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                <polyline points="15 18 9 12 15 6" />
-                            </svg>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
                             Products
                         </a>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gray-300)" strokeWidth="2" strokeLinecap="round">
-                            <polyline points="9 18 15 12 9 6" />
-                        </svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gray-300)" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6" /></svg>
                         <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--gray-900)' }}>Checkout</span>
                     </div>
                     <h1 className="heading-lg" style={{ fontSize: '1.6rem', marginTop: '0.75rem', marginBottom: '0.25rem' }}>Complete Your Order</h1>
@@ -113,6 +144,9 @@ export default function CheckoutPage() {
                         <p className="body-sm">
                             Ordering from <span style={{ color: 'var(--leaf-600)', fontWeight: 600 }}>{dealerName}</span>
                             {locationName && ` · ${locationName}`}
+                            {distanceKm !== null && fulfillmentType === 'delivery' && (
+                                <span style={{ color: 'var(--gray-400)', marginLeft: '0.5rem' }}>({distanceKm} km away)</span>
+                            )}
                         </p>
                     )}
                 </div>
@@ -141,6 +175,7 @@ export default function CheckoutPage() {
                                         <label className="input-label">Mobile Number (WhatsApp) *</label>
                                         <input className={`input ${errors.phone ? 'error' : ''}`} placeholder="10-digit mobile number" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} maxLength={10} />
                                         {errors.phone && <div className="input-error">{errors.phone}</div>}
+                                        <div style={{ fontSize: '0.72rem', color: 'var(--gray-400)', marginTop: '0.3rem' }}>📲 Order confirmation will be sent to this WhatsApp number</div>
                                     </div>
                                 </div>
                             </div>
@@ -149,10 +184,10 @@ export default function CheckoutPage() {
                             <div style={{ background: 'var(--white)', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-md)', padding: '1.5rem', boxShadow: 'var(--shadow-xs)' }}>
                                 <h3 className="heading-md" style={{ fontSize: '1rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'var(--leaf-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem' }}>🚚</span>
-                                    Fulfillment
+                                    Fulfillment Method
                                 </h3>
                                 <div className="pill-group" style={{ marginBottom: '1rem' }}>
-                                    <button type="button" className={`pill-option ${fulfillmentType === 'pickup' ? 'active' : ''}`} onClick={() => setFulfillmentType('pickup')}>🏪 Store Pickup</button>
+                                    <button type="button" className={`pill-option ${fulfillmentType === 'pickup' ? 'active' : ''}`} onClick={() => setFulfillmentType('pickup')}>🏪 Store Pickup — Free</button>
                                     <button type="button" className={`pill-option ${fulfillmentType === 'delivery' ? 'active' : ''}`} onClick={() => setFulfillmentType('delivery')}>🚚 Home Delivery</button>
                                 </div>
 
@@ -161,14 +196,23 @@ export default function CheckoutPage() {
                                         <label className="input-label">Delivery Address *</label>
                                         <textarea className={`input ${errors.address ? 'error' : ''}`} placeholder="Plot no., Street, Village / City, District, Pincode" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={3} style={{ resize: 'vertical' }} />
                                         {errors.address && <div className="input-error">{errors.address}</div>}
-                                        {delivery === 0 && (
-                                            <div className="badge badge-leaf" style={{ marginTop: '0.5rem' }}>✓ Free delivery (order ≥ ₹2,000)</div>
-                                        )}
-                                        {delivery > 0 && (
-                                            <div style={{ fontSize: '0.78rem', color: 'var(--harvest-700)', background: 'var(--harvest-50)', border: '1px solid rgba(224,143,0,0.2)', borderRadius: '6px', padding: '0.4rem 0.6rem', marginTop: '0.5rem' }}>
-                                                ₹{delivery} delivery charge · Free above ₹2,000
+
+                                        {/* Delivery charge preview */}
+                                        <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', borderRadius: '10px', background: deliveryCharge === 0 ? 'var(--leaf-50)' : '#FFFBEB', border: `1px solid ${deliveryCharge === 0 ? 'rgba(42,116,54,0.2)' : 'rgba(217,119,6,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <div style={{ fontSize: '0.8rem', color: deliveryCharge === 0 ? 'var(--leaf-700)' : '#92400E' }}>
+                                                {chargeLoading ? (
+                                                    <span>📍 Calculating delivery charge…</span>
+                                                ) : (
+                                                    <>
+                                                        {distanceKm !== null ? `📍 ${distanceKm} km from dealer` : '📍 Delivery to your address'}
+                                                        {sub >= 2000 && <span> · Free delivery on orders ≥ ₹2,000</span>}
+                                                    </>
+                                                )}
                                             </div>
-                                        )}
+                                            <div style={{ fontWeight: 800, fontSize: '0.88rem', color: deliveryCharge === 0 ? 'var(--leaf-700)' : '#B45309', marginLeft: '0.5rem', flexShrink: 0 }}>
+                                                {chargeLoading ? '…' : deliveryCharge === 0 ? '✓ Free' : `₹${deliveryCharge}`}
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
 
@@ -216,30 +260,41 @@ export default function CheckoutPage() {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--gray-600)' }}>
                                         <span>Subtotal</span><span>₹{sub.toLocaleString('en-IN')}</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--gray-600)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--gray-600)', alignItems: 'center' }}>
                                         <span>Delivery</span>
-                                        <span style={{ color: delivery === 0 ? '#16a34a' : undefined, fontWeight: delivery === 0 ? 600 : undefined }}>
-                                            {delivery === 0 ? (fulfillmentType === 'pickup' ? '— Pickup' : 'Free') : `₹${delivery}`}
+                                        <span style={{ color: deliveryCharge === 0 ? '#16a34a' : undefined, fontWeight: deliveryCharge === 0 ? 600 : undefined }}>
+                                            {chargeLoading ? '…' : fulfillmentType === 'pickup' ? '— Pickup' : deliveryCharge === 0 ? 'Free' : `₹${deliveryCharge}`}
                                         </span>
                                     </div>
+                                    {distanceKm !== null && fulfillmentType === 'delivery' && !chargeLoading && (
+                                        <div style={{ fontSize: '0.72rem', color: 'var(--gray-400)', textAlign: 'right' }}>
+                                            {distanceKm} km · Distance-based rate
+                                        </div>
+                                    )}
                                     <div className="divider" style={{ margin: '0.4rem 0' }} />
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.05rem' }}>
                                         <span>Total</span>
-                                        <span style={{ color: 'var(--leaf-700)' }}>₹{tot.toLocaleString('en-IN')}</span>
+                                        <span style={{ color: 'var(--leaf-700)' }}>₹{total.toLocaleString('en-IN')}</span>
                                     </div>
                                 </div>
 
-                                <button type="submit" className="btn btn-harvest" style={{ width: '100%', padding: '0.85rem', fontSize: '0.95rem' }} disabled={placing}>
+                                <button type="submit" className="btn btn-harvest" style={{ width: '100%', padding: '0.85rem', fontSize: '0.95rem' }} disabled={placing || chargeLoading}>
                                     {placing ? (
-                                        <><span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.4)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block', marginRight: '0.4rem' }} />Placing Order…</>
-                                    ) : '✓ Place Order (Cash on Delivery)'}
+                                        <><span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.4)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block', marginRight: '0.4rem' }} />Redirecting to PhonePe…</>
+                                    ) : (
+                                        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+                                            Pay with PhonePe
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                        </span>
+                                    )}
                                 </button>
 
                                 <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--gray-400)', marginTop: '0.75rem' }}>
-                                    🔒 Secure Order · Free Returns · Verified Dealer
+                                    🔒 Secured by PhonePe · UPI · Cards · Wallets Accepted
                                 </p>
                             </div>
                         </div>
+
                     </div>
                 </form>
             </div>

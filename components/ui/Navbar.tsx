@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useCartStore } from '@/store/cartStore';
 import CartDrawer from './CartDrawer';
 
@@ -28,7 +29,10 @@ function GrapeLogo({ size = 32 }: { size?: number }) {
 
 export default function Navbar() {
     const { totalItems, openCart, isOpen } = useCartStore();
-    const count = totalItems();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => { setMounted(true); }, []);
+    // Only read cart count after client hydration — prevents SSR mismatch
+    const count = mounted ? totalItems() : 0;
 
     return (
         <>
@@ -64,6 +68,13 @@ export default function Navbar() {
                                     <polyline points="9 22 9 12 15 12 15 22" />
                                 </svg>
                                 Products
+                            </Link>
+
+                            <Link href="/account" className="btn btn-ghost" style={{ fontSize: '0.88rem', fontWeight: 500 }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                                </svg>
+                                My Orders
                             </Link>
 
                             {/* Cart Button */}
