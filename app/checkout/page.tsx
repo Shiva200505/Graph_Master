@@ -5,6 +5,24 @@ import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { useLocationStore } from '@/store/locationStore';
 
+// Add type declaration for Razorpay attached to window
+declare global {
+    interface Window {
+        Razorpay: any;
+    }
+}
+
+// Utility to load Razorpay Script
+function loadRazorpayScript(src: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+    });
+}
+
 interface FormData {
     name: string;
     phone: string;
@@ -20,6 +38,14 @@ export default function CheckoutPage() {
     const [errors, setErrors] = useState<Partial<FormData>>({});
     const [placing, setPlacing] = useState(false);
     const [apiError, setApiError] = useState('');
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
 
     // ── Dynamic delivery charge state ──────────────────────────────────────────
     const [deliveryCharge, setDeliveryCharge] = useState(0);
@@ -77,7 +103,7 @@ export default function CheckoutPage() {
         setPlacing(true);
         setApiError('');
         try {
-            // Initiate PhonePe payment — creates order with pending_payment status
+            // Initiate Razorpay payment — creates order in backend and fetches RZP order ID
             const res = await fetch('/api/payments/initiate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -103,9 +129,65 @@ export default function CheckoutPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error ?? 'Order failed');
 
-            // Clear cart then redirect to PhonePe payment page
-            clearCart();
-            window.location.href = data.redirectUrl;
+            // Load Razorpay Script
+            const isLoaded = await loadRazorpayScript('https://checkout.razorpay.com/v1/checkout.js');
+            if (!isLoaded) {
+                throw new Error('Failed to load Razorpay SDK. Please check your internet connection.');
+            }
+
+            // Open Razorpay Checkout Modal
+            const options = {
+                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_YOUR_KEY', // Safely fall back if env empty
+                amount: data.total * 100, // paise
+                currency: 'INR',
+                name: 'GrapeMaster',
+                description: 'Order Payment',
+                order_id: data.rzpOrderId, // The Razorpay order ID we got from backend
+                handler: async function (response: any) {
+                    try {
+                        const verifyRes = await fetch('/api/payments/callback', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_signature: response.razorpay_signature,
+                                merchantTxnId: data.merchantTxnId,
+                            })
+                        });
+                        const verifyData = await verifyRes.json();
+                        if (verifyData.success) {
+                            clearCart();
+                            router.push(`/payment/success?txnId=${data.merchantTxnId}`);
+                        } else {
+                            throw new Error(verifyData.error || 'Payment verification failed');
+                        }
+                    } catch (err: unknown) {
+                        setApiError(err instanceof Error ? err.message : 'Verification failed');
+                        setPlacing(false);
+                    }
+                },
+                prefill: {
+                    name: form.name.trim(),
+                    contact: form.phone.trim(),
+                },
+                theme: {
+                    color: '#2A7436' // Primary leaf color
+                },
+                modal: {
+                    ondismiss: function() {
+                        setPlacing(false);
+                    }
+                }
+            };
+            
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (response: any) {
+                setApiError(`Payment failed: ${response.error.description}`);
+                setPlacing(false);
+            });
+            rzp.open();
+            
         } catch (err: unknown) {
             setApiError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
             setPlacing(false);
@@ -154,7 +236,7 @@ export default function CheckoutPage() {
 
             <div className="container">
                 <form onSubmit={handleSubmit}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 360px', gap: '1.5rem', alignItems: 'start' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0,1fr) 360px', gap: '1.5rem', alignItems: 'start' }}>
 
                         {/* ── Left Column ── */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -186,7 +268,7 @@ export default function CheckoutPage() {
                                     <span style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'var(--leaf-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem' }}>🚚</span>
                                     Fulfillment Method
                                 </h3>
-                                <div className="pill-group" style={{ marginBottom: '1rem' }}>
+                                <div className="pill-group" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
                                     <button type="button" className={`pill-option ${fulfillmentType === 'pickup' ? 'active' : ''}`} onClick={() => setFulfillmentType('pickup')}>🏪 Store Pickup — Free</button>
                                     <button type="button" className={`pill-option ${fulfillmentType === 'delivery' ? 'active' : ''}`} onClick={() => setFulfillmentType('delivery')}>🚚 Home Delivery</button>
                                 </div>
@@ -280,23 +362,49 @@ export default function CheckoutPage() {
 
                                 <button type="submit" className="btn btn-harvest" style={{ width: '100%', padding: '0.85rem', fontSize: '0.95rem' }} disabled={placing || chargeLoading}>
                                     {placing ? (
-                                        <><span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.4)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block', marginRight: '0.4rem' }} />Redirecting to PhonePe…</>
+                                        <><span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.4)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block', marginRight: '0.4rem' }} />Opening Secure Payment…</>
                                     ) : (
                                         <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                                            Pay with PhonePe
+                                            Pay with Razorpay
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                                         </span>
                                     )}
                                 </button>
 
-                                <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--gray-400)', marginTop: '0.75rem' }}>
-                                    🔒 Secured by PhonePe · UPI · Cards · Wallets Accepted
+                                <p style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--gray-500)', marginTop: '0.625rem', lineHeight: 1.5, padding: '0 0.25rem' }}>
+                                    Your order will be confirmed only after successful payment.
+                                </p>
+
+                                <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--gray-400)', marginTop: '0.5rem' }}>
+                                    🔒 Secured by Razorpay · UPI · Cards · Wallets Accepted
                                 </p>
                             </div>
                         </div>
 
                     </div>
                 </form>
+
+                {/* Sticky mobile checkout bar */}
+                {isMobile && (
+                    <div style={{
+                        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
+                        background: 'white', borderTop: '1px solid var(--gray-200)',
+                        padding: '0.875rem 1.25rem', boxShadow: '0 -4px 16px rgba(0,0,0,0.08)',
+                        display: 'flex', alignItems: 'center', gap: '0.75rem',
+                    }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 900, fontSize: '1.1rem', color: 'var(--gray-900)' }}>₹{total.toLocaleString('en-IN')}</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>{items.length} item{items.length !== 1 ? 's' : ''} · {fulfillmentType === 'pickup' ? 'Pickup' : 'Delivery'}</div>
+                        </div>
+                        <button type="button" onClick={handleSubmit as unknown as React.MouseEventHandler}
+                            className="btn btn-harvest" disabled={placing || chargeLoading}
+                            style={{ padding: '0.75rem 1.5rem', fontSize: '0.9rem', flexShrink: 0 }}>
+                            {placing ? 'Opening Secure Payment…' : 'Pay with Razorpay →'}
+                        </button>
+                    </div>
+                )}
+                {/* Bottom padding for sticky bar on mobile */}
+                {isMobile && <div style={{ height: '80px' }} />}
             </div>
         </div>
     );

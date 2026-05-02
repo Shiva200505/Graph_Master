@@ -13,6 +13,8 @@ interface AnalyticsData {
     topDealers: { dealerName: string; orderCount: number; revenue: number }[];
     fulfillmentStats: { fulfillmentType: string; count: number }[];
     totalStats: { totalOrders: number; totalRevenue: number; avgOrderValue: number };
+    locationInsights: { location: string; order_count: number; revenue: number }[];
+    mlStats: { total_orders: number; returning_customers: number; avg_items_per_order: number; mlServiceActive: boolean };
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -69,7 +71,7 @@ export default function AnalyticsPage() {
         <div style={{ padding: '3rem', textAlign: 'center', color: '#DC2626' }}>{error || 'No data'}</div>
     );
 
-    const { dailyRevenue, ordersByStatus, topProducts, topDealers, fulfillmentStats, totalStats } = data;
+    const { dailyRevenue, ordersByStatus, topProducts, topDealers, fulfillmentStats, totalStats, locationInsights, mlStats } = data;
 
     // Format daily revenue for chart — fill empty dates with 0
     const chartRevenue = dailyRevenue.map((d) => ({
@@ -214,6 +216,121 @@ export default function AnalyticsPage() {
                         </div>
                     )}
                 </ChartCard>
+            </div>
+
+            {/* ── New Row: Location Insights + ML Stats ── */}
+            <div style={{ marginTop: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+
+                {/* Orders by Location — horizontal bar chart */}
+                <ChartCard title="📍 Orders by Location">
+                    {(!locationInsights || locationInsights.length === 0) ? (
+                        <div style={{ color: 'var(--gray-400)', padding: '2rem', textAlign: 'center' }}>No location data yet</div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={260}>
+                            <BarChart data={locationInsights} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
+                                <XAxis type="number" tick={{ fontSize: 11 }} />
+                                <YAxis dataKey="location" type="category" tick={{ fontSize: 12, fontWeight: 600 }} width={96} />
+                                <Tooltip
+                                    formatter={(v: unknown, name: unknown) => [
+                                        name === 'order_count' ? `${Number(v)} orders` : `₹${Number(v).toLocaleString('en-IN')}`,
+                                        name === 'order_count' ? 'Orders' : 'Revenue',
+                                    ]}
+                                    labelStyle={{ fontWeight: 700 }}
+                                />
+                                <Bar dataKey="order_count" name="Orders" fill="#2A7436" radius={[0, 6, 6, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    )}
+                </ChartCard>
+
+                {/* ML Recommendation Insights */}
+                <ChartCard title="🤖 ML Recommendation Insights">
+                    {(() => {
+                        const ml = mlStats ?? { total_orders: 0, returning_customers: 0, avg_items_per_order: 0, mlServiceActive: false };
+                        const retentionPct = ml.total_orders > 0
+                            ? Math.round((ml.returning_customers / ml.total_orders) * 100)
+                            : 0;
+                        const source = ml.mlServiceActive ? 'ML Engine' : 'Popularity Fallback';
+
+                        return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                {/* 3 stat boxes */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                                    {[
+                                        {
+                                            label: 'Retention Rate',
+                                            value: `${retentionPct}%`,
+                                            sub: `${ml.returning_customers} returning / ${ml.total_orders} total`,
+                                            color: retentionPct >= 50 ? 'var(--leaf-700)' : '#D97706',
+                                        },
+                                        {
+                                            label: 'Avg Items / Order',
+                                            value: String(ml.avg_items_per_order ?? '—'),
+                                            sub: 'across non-cancelled orders',
+                                            color: 'var(--gray-900)',
+                                        },
+                                        {
+                                            label: 'ML Service',
+                                            value: ml.mlServiceActive ? 'Active' : 'Fallback',
+                                            sub: ml.mlServiceActive ? 'ML model serving recs' : 'Using popularity model',
+                                            color: ml.mlServiceActive ? 'var(--leaf-700)' : '#D97706',
+                                        },
+                                    ].map(s => (
+                                        <div key={s.label} style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-200)', borderRadius: '10px', padding: '0.875rem 1rem' }}>
+                                            <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--gray-400)', marginBottom: '0.3rem' }}>{s.label}</div>
+                                            <div style={{ fontSize: '1.4rem', fontWeight: 900, color: s.color, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '0.2rem' }}>{s.value}</div>
+                                            <div style={{ fontSize: '0.68rem', color: 'var(--gray-400)' }}>{s.sub}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Status banner */}
+                                <div style={{
+                                    background: ml.mlServiceActive ? '#F0FDF4' : '#FFFBEB',
+                                    border: `1px solid ${ml.mlServiceActive ? 'rgba(22,163,74,0.3)' : '#FDE68A'}`,
+                                    borderRadius: '10px',
+                                    padding: '0.875rem 1rem',
+                                    display: 'flex',
+                                    gap: '0.6rem',
+                                    alignItems: 'flex-start',
+                                }}>
+                                    <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{ml.mlServiceActive ? '🤖' : '🔥'}</span>
+                                    <div>
+                                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: ml.mlServiceActive ? '#15803D' : '#92400E', marginBottom: '0.15rem' }}>
+                                            Currently using: {source}
+                                        </div>
+                                        <div style={{ fontSize: '0.77rem', color: ml.mlServiceActive ? '#166534' : '#92400E', lineHeight: 1.5 }}>
+                                            ML recommendations improve as more orders are placed.
+                                            {!ml.mlServiceActive && ' Set ML_SERVICE_URL in environment to enable real-time model serving.'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Progress bar: retention */}
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: 'var(--gray-600)', marginBottom: '0.35rem' }}>
+                                        <span>Customer Retention Progress</span>
+                                        <span>{retentionPct}%</span>
+                                    </div>
+                                    <div style={{ height: '8px', background: 'var(--gray-100)', borderRadius: '4px', overflow: 'hidden' }}>
+                                        <div style={{
+                                            width: `${retentionPct}%`,
+                                            height: '100%',
+                                            background: retentionPct >= 50
+                                                ? 'linear-gradient(to right, #2A7436, #52B061)'
+                                                : 'linear-gradient(to right, #F59E0B, #FBBF24)',
+                                            borderRadius: '4px',
+                                            transition: 'width 0.8s ease',
+                                        }} />
+                                    </div>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)', marginTop: '0.25rem' }}>Target: 50%+ for strong ML signal quality</div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </ChartCard>
+
             </div>
 
         </div>

@@ -134,6 +134,25 @@ export async function POST(req: NextRequest) {
             orderId: order.id,
         }).catch((e) => console.error('[notify] Error:', e));
 
+        // ── Track purchase events for ML (non-blocking) ───────────────────────
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+        const sessionId: string | null = body.sessionId ?? null;
+        order.items.forEach((item) => {
+            if (item.productId) {
+                fetch(`${appUrl}/api/recommendations/events`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        eventType: 'purchase',
+                        productId: item.productId,
+                        dealerId: order.dealerId,
+                        sessionId,
+                        userId: userId ?? null,
+                    }),
+                }).catch(() => {}); // Silent fail
+            }
+        });
+
         return NextResponse.json({
             order: { ...order, distanceKm },
             success: true,
@@ -142,7 +161,12 @@ export async function POST(req: NextRequest) {
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to create order';
         console.error('[API/orders POST]', err);
-        return NextResponse.json({ error: message }, { status: 500 });
+        // Insufficient stock errors are a client conflict (409), not a server error
+        const isStockError = message.startsWith('Insufficient stock');
+        return NextResponse.json(
+            { error: message, code: isStockError ? 'OUT_OF_STOCK' : 'ORDER_FAILED' },
+            { status: isStockError ? 409 : 500 }
+        );
     } finally {
         await prisma.$disconnect();
         await pool.end();

@@ -21,7 +21,7 @@ export async function GET(
             include: {
                 items: { orderBy: { createdAt: 'asc' } },
                 dealer: { select: { id: true, name: true, phone: true, address: true } },
-                payment: true,
+                payment: { select: { status: true, merchantTransactionId: true } },
             },
         });
 
@@ -29,7 +29,13 @@ export async function GET(
             return NextResponse.json({ error: 'Order not found' }, { status: 404 });
         }
 
-        return NextResponse.json({ order });
+        return NextResponse.json({
+            order: {
+                ...order,
+                paymentStatus: order.payment?.status ?? null,
+                merchantTransactionId: order.payment?.merchantTransactionId ?? null,
+            },
+        });
     } catch (err) {
         console.error('[API/orders/:id]', err);
         return NextResponse.json({ error: 'Failed to fetch order' }, { status: 500 });

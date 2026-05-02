@@ -9,9 +9,15 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') ?? 'all';
     const search = searchParams.get('search') ?? '';
-    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
-    const limit = 20;
-    const skip = (page - 1) * limit;
+    const limitParam = searchParams.get('limit') ?? '20';
+    const isAll = limitParam === 'all';
+    const limit = isAll ? 1000 : Math.min(parseInt(limitParam) || 20, 200);
+    const page = isAll ? 1 : Math.max(1, parseInt(searchParams.get('page') ?? '1'));
+    const skip = isAll ? 0 : (page - 1) * limit;
+
+    // Date range filter
+    const fromStr = searchParams.get('from');
+    const toStr = searchParams.get('to');
 
     const where: Record<string, unknown> = {};
     if (status !== 'all') where.status = status;
@@ -21,6 +27,12 @@ export async function GET(req: NextRequest) {
             { customerName: { contains: search, mode: 'insensitive' } },
             { customerPhone: { contains: search } },
         ];
+    }
+    if (fromStr || toStr) {
+        const createdAt: Record<string, Date> = {};
+        if (fromStr) createdAt.gte = new Date(`${fromStr}T00:00:00.000Z`);
+        if (toStr) createdAt.lte = new Date(`${toStr}T23:59:59.999Z`);
+        where.createdAt = createdAt;
     }
 
     try {
@@ -54,10 +66,10 @@ export async function GET(req: NextRequest) {
             })),
             total,
             page,
-            totalPages: Math.ceil(total / limit),
+            totalPages: isAll ? 1 : Math.ceil(total / limit),
         });
     } catch (err) {
         console.error('[admin/orders GET]', err);
-        return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to fetch orders', code: 'DB_ERROR' }, { status: 500 });
     }
 }

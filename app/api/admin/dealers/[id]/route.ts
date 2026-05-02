@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import bcrypt from 'bcryptjs';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await getSession();
@@ -57,16 +58,36 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     try {
         const body = await req.json();
+        const { name, phone, email, address, coverageRadiusKm, isActive, password, lat, lng } = body;
+
+        // ── Build Prisma update payload (scalar fields) ─────────────────────────
+        const prismaData: Record<string, unknown> = {};
+        if (typeof isActive === 'boolean') prismaData.isActive = isActive;
+        if (name) prismaData.name = name;
+        if (phone) prismaData.phone = phone;
+        if (email) prismaData.email = email.trim().toLowerCase();
+        if (address) prismaData.address = address;
+        if (coverageRadiusKm !== undefined) prismaData.coverageRadiusKm = Number(coverageRadiusKm);
+        if (password && password.length >= 8) {
+            prismaData.passwordHash = await bcrypt.hash(password, 10);
+        }
+
         const dealer = await prisma.dealer.update({
             where: { id },
-            data: {
-                ...(typeof body.isActive === 'boolean' ? { isActive: body.isActive } : {}),
-                ...(body.name ? { name: body.name } : {}),
-                ...(body.phone ? { phone: body.phone } : {}),
-                ...(body.coverageRadiusKm !== undefined ? { coverageRadiusKm: body.coverageRadiusKm } : {}),
-            },
-            select: { id: true, name: true, isActive: true },
+            data: prismaData,
+            select: { id: true, name: true, isActive: true, email: true },
         });
+
+        // ── Update PostGIS location if lat/lng supplied ──────────────────────────
+        if (lat != null && lng != null) {
+            await prisma.$executeRaw`
+                UPDATE dealers
+                SET location = ST_SetSRID(ST_MakePoint(${Number(lng)}, ${Number(lat)}), 4326)::geography,
+                    updated_at = NOW()
+                WHERE id = ${id}
+            `;
+        }
+
         return NextResponse.json({ ok: true, dealer });
     } catch (err) {
         console.error('[admin/dealers/:id PATCH]', err);

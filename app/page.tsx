@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocationStore } from '@/store/locationStore';
 import { useCartStore } from '@/store/cartStore';
+import ProductRecommendations from '@/components/ui/ProductRecommendations';
 
 const LOCATIONS = [
   { name: 'Pune', lat: 18.5204, lng: 73.8567, region: 'Western MH' },
@@ -39,7 +40,7 @@ const STATS = [
 
 export default function HomePage() {
   const router = useRouter();
-  const { setLocation, setNearestDealer, nearestDealer, locationName } = useLocationStore();
+  const { setLocation, setNearestDealer, nearestDealer, locationName, lat, lng } = useLocationStore();
   const { setDealer } = useCartStore();
   const [selected, setSelected] = useState('');
   const [loading, setLoading] = useState(false);
@@ -328,6 +329,23 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ═══════════════════════════════════════════════════════════
+          AI RECOMMENDATIONS
+      ═══════════════════════════════════════════════════════════ */}
+      {nearestDealer && (
+        <section className="section" style={{ background: 'var(--white)' }}>
+          <div className="container">
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '0.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <div className="section-eyebrow">Personalized for You</div>
+                <h2 className="heading-lg">Trending in Your Area</h2>
+              </div>
+            </div>
+            <ProductRecommendations lat={lat} lng={lng} />
+          </div>
+        </section>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════
           HOW IT WORKS

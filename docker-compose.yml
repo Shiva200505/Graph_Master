@@ -1,0 +1,91 @@
+version: '3.8'
+
+# ============================================================
+#  GrapeMaster — Docker Compose
+#
+#  Development / staging: docker compose up --build
+#  Production:            use a managed DB + deploy app separately
+#
+#  Copy .env.example → .env.local before starting.
+# ============================================================
+
+services:
+
+  # ── Next.js Application ──────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: grapemaster-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-grapemaster_dev}@db:5432/grapemaster
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      NODE_ENV: production
+      # Pass-through optional vars from .env.local
+      PHONEPE_MERCHANT_ID: ${PHONEPE_MERCHANT_ID:-}
+      PHONEPE_SALT_KEY: ${PHONEPE_SALT_KEY:-}
+      PHONEPE_SALT_INDEX: ${PHONEPE_SALT_INDEX:-1}
+      PHONEPE_API_URL: ${PHONEPE_API_URL:-https://api-preprod.phonepe.com/apis/pg-sandbox}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+      MSG91_AUTHKEY: ${MSG91_AUTHKEY:-}
+      MSG91_TEMPLATE_ID: ${MSG91_TEMPLATE_ID:-}
+      ML_SERVICE_URL: ${ML_SERVICE_URL:-http://ml:8001}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gm-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ── PostgreSQL + PostGIS ─────────────────────────────────────
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: grapemaster-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: grapemaster
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-grapemaster_dev}
+    ports:
+      - "5432:5432"               # Expose for local dev tools (pgAdmin, etc.)
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - gm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d grapemaster"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── ML Recommendation Service (optional) ─────────────────────
+  # Uncomment if you have the Python FastAPI service
+  # ml:
+  #   image: grapemaster-ml:latest
+  #   build:
+  #     context: ./ml-service
+  #   container_name: grapemaster-ml
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8001:8001"
+  #   networks:
+  #     - gm-network
+
+volumes:
+  pgdata:
+    driver: local
+
+networks:
+  gm-network:
+    driver: bridge

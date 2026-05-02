@@ -8,11 +8,30 @@ interface Dealer {
     isActive: boolean; orderCount: number; totalRevenue: number; coverageRadiusKm: number; createdAt: string;
 }
 
+interface FormData {
+    name: string; phone: string; email: string; password: string;
+    address: string; lat: string; lng: string; coverageRadiusKm: string;
+}
+
+const EMPTY_FORM: FormData = {
+    name: '', phone: '', email: '', password: '',
+    address: '', lat: '', lng: '', coverageRadiusKm: '15',
+};
+
+const IL = { fontWeight: 700, fontSize: '0.72rem', color: 'var(--gray-600)', marginBottom: '0.3rem', display: 'block' } as const;
+const II = { width: '100%', padding: '0.55rem 0.75rem', border: '1.5px solid var(--gray-200)', borderRadius: '8px', fontSize: '0.85rem', background: 'white', outline: 'none', boxSizing: 'border-box' as const };
+
 export default function AdminDealersPage() {
     const router = useRouter();
     const [dealers, setDealers] = useState<Dealer[]>([]);
     const [loading, setLoading] = useState(true);
     const [toggling, setToggling] = useState<string | null>(null);
+
+    // ── Add Dealer Form state ──────────────────────────────────────────────────
+    const [showForm, setShowForm] = useState(false);
+    const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
+    const [saving, setSaving] = useState(false);
+    const [formError, setFormError] = useState('');
 
     const fetchDealers = async () => {
         const res = await fetch('/api/admin/dealers');
@@ -35,13 +54,162 @@ export default function AdminDealersPage() {
         setToggling(null);
     };
 
+    // ── Client-side validation ─────────────────────────────────────────────────
+    const validate = (): string => {
+        const { name, phone, email, password, address, lat, lng, coverageRadiusKm } = formData;
+        if (!name.trim()) return 'Name is required';
+        if (!phone.trim() || !/^[6-9]\d{9}$/.test(phone.trim())) return 'Phone must be a valid 10-digit number starting with 6–9';
+        if (!email.trim()) return 'Email is required';
+        if (!password || password.length < 8) return 'Password must be at least 8 characters';
+        if (!address.trim()) return 'Address is required';
+        const latN = parseFloat(lat);
+        const lngN = parseFloat(lng);
+        if (isNaN(latN) || latN < 15 || latN > 25) return 'Latitude must be between 15 and 25 (Maharashtra range)';
+        if (isNaN(lngN) || lngN < 72 || lngN > 80) return 'Longitude must be between 72 and 80 (Maharashtra range)';
+        const radN = parseFloat(coverageRadiusKm);
+        if (isNaN(radN) || radN <= 0) return 'Coverage radius must be a positive number';
+        return '';
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const err = validate();
+        if (err) { setFormError(err); return; }
+
+        setSaving(true);
+        setFormError('');
+        try {
+            const res = await fetch('/api/admin/dealers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: formData.name.trim(),
+                    phone: formData.phone.trim(),
+                    email: formData.email.trim(),
+                    password: formData.password,
+                    address: formData.address.trim(),
+                    lat: parseFloat(formData.lat),
+                    lng: parseFloat(formData.lng),
+                    coverageRadiusKm: parseFloat(formData.coverageRadiusKm),
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) { setFormError(data.error ?? 'Failed to create dealer'); return; }
+
+            // Success — close form, reset, refresh list
+            setShowForm(false);
+            setFormData(EMPTY_FORM);
+            await fetchDealers();
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const f = (field: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+        setFormData(prev => ({ ...prev, [field]: e.target.value }));
+
     return (
         <div>
-            <div style={{ marginBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.03em' }}>Dealers</h1>
-                <p style={{ color: 'var(--gray-500)', fontSize: '0.84rem', marginTop: '0.25rem' }}>{dealers.filter(d => d.isActive).length} active of {dealers.length} total</p>
+            {/* ── Page Header ── */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div>
+                    <h1 style={{ fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.03em' }}>Dealers</h1>
+                    <p style={{ color: 'var(--gray-500)', fontSize: '0.84rem', marginTop: '0.25rem' }}>
+                        {dealers.filter(d => d.isActive).length} active of {dealers.length} total
+                    </p>
+                </div>
+                <button
+                    onClick={() => { setShowForm(v => !v); setFormError(''); }}
+                    style={{
+                        padding: '0.55rem 1.1rem', border: 'none', borderRadius: '8px',
+                        background: showForm ? 'var(--gray-200)' : 'var(--leaf-600)',
+                        color: showForm ? 'var(--gray-700)' : 'white',
+                        fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '0.4rem',
+                        transition: 'all 0.15s',
+                    }}
+                >
+                    {showForm ? '✕ Cancel' : '+ Add Dealer'}
+                </button>
             </div>
 
+            {/* ── Add Dealer Form Panel ── */}
+            {showForm && (
+                <div style={{
+                    background: 'white', border: '1px solid var(--gray-200)', borderRadius: '12px',
+                    padding: '1.5rem', marginBottom: '1.5rem', boxShadow: 'var(--shadow-md)',
+                    animation: 'fadeUp 0.2s ease',
+                }}>
+                    <h2 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '1.25rem', color: 'var(--gray-900)' }}>
+                        ➕ New Dealer
+                    </h2>
+                    <form onSubmit={handleSubmit}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+
+                            <div>
+                                <label style={IL}>Name *</label>
+                                <input style={II} placeholder="Dealer / Store name" value={formData.name} onChange={f('name')} />
+                            </div>
+                            <div>
+                                <label style={IL}>Phone *</label>
+                                <input style={II} placeholder="10-digit mobile" value={formData.phone}
+                                    onChange={e => setFormData(p => ({ ...p, phone: e.target.value.replace(/\D/g, '') }))}
+                                    maxLength={10} />
+                            </div>
+                            <div>
+                                <label style={IL}>Email *</label>
+                                <input style={II} type="email" placeholder="dealer@example.com" value={formData.email} onChange={f('email')} />
+                            </div>
+                            <div>
+                                <label style={IL}>Password *</label>
+                                <input style={II} type="password" placeholder="Min 8 characters" value={formData.password} onChange={f('password')} />
+                            </div>
+                            <div>
+                                <label style={IL}>Latitude * <span style={{ fontWeight: 400, color: 'var(--gray-400)' }}>(15 – 25)</span></label>
+                                <input style={II} type="number" step="any" placeholder="e.g. 18.5204" value={formData.lat} onChange={f('lat')} />
+                            </div>
+                            <div>
+                                <label style={IL}>Longitude * <span style={{ fontWeight: 400, color: 'var(--gray-400)' }}>(72 – 80)</span></label>
+                                <input style={II} type="number" step="any" placeholder="e.g. 73.8567" value={formData.lng} onChange={f('lng')} />
+                            </div>
+                            <div>
+                                <label style={IL}>Coverage Radius (km) *</label>
+                                <input style={II} type="number" step="any" min="1" value={formData.coverageRadiusKm} onChange={f('coverageRadiusKm')} />
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={IL}>Address *</label>
+                                <textarea style={{ ...II, resize: 'vertical' }} rows={2} placeholder="Full address of the dealer/store"
+                                    value={formData.address} onChange={f('address')} />
+                            </div>
+                        </div>
+
+                        {formError && (
+                            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '0.6rem 0.875rem', color: '#DC2626', fontSize: '0.84rem', marginBottom: '1rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                <span>⚠️</span> {formError}
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button type="submit" disabled={saving} style={{
+                                padding: '0.6rem 1.25rem', border: 'none', borderRadius: '8px',
+                                background: 'var(--leaf-600)', color: 'white', fontWeight: 700, fontSize: '0.88rem',
+                                cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.75 : 1,
+                                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                            }}>
+                                {saving ? (
+                                    <><span style={{ width: '13px', height: '13px', border: '2px solid rgba(255,255,255,0.35)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 0.75s linear infinite', display: 'inline-block' }} />Saving…</>
+                                ) : 'Create Dealer'}
+                            </button>
+                            <button type="button" onClick={() => { setShowForm(false); setFormData(EMPTY_FORM); setFormError(''); }}
+                                style={{ padding: '0.6rem 1rem', border: '1px solid var(--gray-200)', borderRadius: '8px', background: 'white', fontSize: '0.88rem', cursor: 'pointer', fontWeight: 600, color: 'var(--gray-600)' }}>
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {/* ── Dealers Table ── */}
             <div style={{ background: 'white', border: '1px solid var(--gray-200)', borderRadius: '12px', overflow: 'hidden', boxShadow: 'var(--shadow-xs)' }}>
                 <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -55,7 +223,9 @@ export default function AdminDealersPage() {
                         <tbody>
                             {loading ? Array.from({ length: 4 }).map((_, i) => (
                                 <tr key={i}><td colSpan={7} style={{ padding: '0.75rem 1rem' }}><div className="skeleton" style={{ height: '18px' }} /></td></tr>
-                            )) : dealers.map((d, i) => (
+                            )) : dealers.length === 0 ? (
+                                <tr><td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.88rem' }}>No dealers yet — add one above.</td></tr>
+                            ) : dealers.map((d, i) => (
                                 <tr key={d.id}
                                     style={{ borderBottom: '1px solid var(--gray-100)', background: i % 2 === 0 ? 'white' : '#fafafa', transition: 'background 0.1s', opacity: d.isActive ? 1 : 0.6 }}>
                                     <td style={{ padding: '0.875rem 1rem' }}>

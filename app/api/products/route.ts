@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const dealerId = searchParams.get('dealerId');
     const category = searchParams.get('category');
     const search = searchParams.get('search');
+    const sort = searchParams.get('sort'); // 'price_asc' | 'price_desc'
 
     const prisma = getClient();
     try {
@@ -30,7 +31,11 @@ export async function GET(req: NextRequest) {
                         select: { id: true, name: true, description: true, category: true, unit: true, imageUrl: true },
                     },
                 },
-                orderBy: { product: { name: 'asc' } },
+                orderBy: sort === 'price_asc'
+                    ? { price: 'asc' as const }
+                    : sort === 'price_desc'
+                        ? { price: 'desc' as const }
+                        : { product: { name: 'asc' as const } },
             });
 
             const products = inventory.map((inv) => ({
@@ -54,7 +59,11 @@ export async function GET(req: NextRequest) {
         // No dealerId — return all active products
         const raw = await prisma.product.findMany({
             where,
-            orderBy: { name: 'asc' },
+            orderBy: sort === 'price_asc'
+                ? { basePrice: 'asc' as const }
+                : sort === 'price_desc'
+                    ? { basePrice: 'desc' as const }
+                    : { name: 'asc' as const },
             select: { id: true, name: true, description: true, category: true, unit: true, basePrice: true, imageUrl: true },
         });
         const products = raw.map((p) => ({ ...p, price: Number(p.basePrice), quantity: 0 }));

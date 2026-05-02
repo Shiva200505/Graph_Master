@@ -7,8 +7,14 @@ export async function GET() {
     if (!session || session.role !== 'customer') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     try {
+        const userPhone = session.phone?.replace(/\s+/g, '');
         const orders = await prisma.order.findMany({
-            where: { userId: session.id },
+            where: {
+                OR: [
+                    { userId: session.id },
+                    ...(userPhone ? [{ customerPhone: userPhone }] : [])
+                ]
+            },
             orderBy: { createdAt: 'desc' },
             include: {
                 items: { select: { productName: true, quantity: true, unitPrice: true, subtotal: true } },

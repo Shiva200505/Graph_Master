@@ -85,6 +85,11 @@ export default function DealerOrdersPage() {
                                 </div>
                                 <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.2rem' }}>{o.customerName}</div>
                                 <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', marginBottom: '0.2rem' }}>📞 {o.customerPhone}</div>
+                                {o.fulfillmentType === 'delivery' && (
+                                    <div style={{ fontSize: '0.78rem', color: 'var(--gray-600)', marginBottom: '0.3rem', lineHeight: 1.4, maxWidth: '300px' }}>
+                                        📍 {o.deliveryAddress}
+                                    </div>
+                                )}
                                 <div style={{ fontSize: '0.76rem', color: 'var(--gray-400)' }}>{o.itemCount} item(s): {o.itemNames}{o.itemCount > 2 ? '...' : ''}</div>
                             </div>
 

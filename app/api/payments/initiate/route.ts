@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@/app/generated/prisma';
-import { initiatePhonePePayment } from '@/lib/phonepe';
+import { getRazorpay } from '@/lib/razorpay';
 import { haversineKm, calcDeliveryCharge } from '@/lib/haversine';
 import { notifyOrderPlaced } from '@/lib/notify';
 
@@ -18,8 +18,8 @@ function getClient() {
  * POST /api/payments/initiate
  * 1. Creates order with status = 'pending_payment'
  * 2. Creates Payment record
- * 3. Calls PhonePe to get redirect URL
- * 4. Returns { redirectUrl } to frontend
+ * 3. Calls Razorpay to get order_id
+ * 4. Returns { rzpOrderId, orderId, amount } to frontend
  *
  * Inventory is NOT deducted yet — deduction happens in callback after payment confirmation.
  */
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
             });
             if (!inv || inv.quantity < item.quantity) {
                 return NextResponse.json(
-                    { error: `Insufficient stock for: ${item.productName}` },
+                    { error: `Insufficient stock for: ${item.productName}`, code: 'OUT_OF_STOCK' },
                     { status: 409 }
                 );
             }
@@ -118,18 +118,24 @@ export async function POST(req: NextRequest) {
             },
         });
 
-        // Initiate PhonePe
-        const ppResult = await initiatePhonePePayment({
-            merchantTransactionId: merchantTxnId,
-            amount: total,
-            mobileNumber: customerPhone,
-            orderId: order.id,
-        });
+        // Initiate Razorpay Order
+        const razorpay = getRazorpay();
+        const rzpParams = {
+            amount: total * 100, // paise
+            currency: 'INR',
+            receipt: merchantTxnId,
+        };
 
-        if (!ppResult.success || !ppResult.redirectUrl) {
-            // Clean up order if PhonePe fails
+        let rzpOrder;
+        try {
+            rzpOrder = await razorpay.orders.create(rzpParams);
+        } catch (rzpErr) {
+            console.error('[Razorpay] Orders create failed:', rzpErr);
             await prisma.order.delete({ where: { id: order.id } });
-            return NextResponse.json({ error: ppResult.error ?? 'Payment initiation failed' }, { status: 502 });
+            return NextResponse.json(
+                { error: 'Payment gateway error', code: 'PAYMENT_GATEWAY_ERROR' },
+                { status: 502 }
+            );
         }
 
         // Send WhatsApp notification (non-blocking) — payment pending state
@@ -145,10 +151,13 @@ export async function POST(req: NextRequest) {
             orderId: order.id,
         }).catch((e) => console.error('[notify] Error:', e));
 
-        return NextResponse.json({ redirectUrl: ppResult.redirectUrl, orderId: order.id });
+        return NextResponse.json({ rzpOrderId: rzpOrder.id, orderId: order.id, total, merchantTxnId });
     } catch (err) {
         console.error('[payments/initiate]', err);
-        return NextResponse.json({ error: 'Failed to initiate payment' }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Failed to initiate payment', code: 'PAYMENT_INIT_FAILED' },
+            { status: 500 }
+        );
     } finally {
         await prisma.$disconnect();
         await pool.end();

@@ -1,18 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
+import { useCartStore } from '@/store/cartStore';
 
 function SuccessContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const txnId = searchParams.get('txnId');
+    const { clearCart } = useCartStore();
 
     const [status, setStatus] = useState<'checking' | 'success' | 'failed' | 'pending'>('checking');
     const [orderId, setOrderId] = useState<string | null>(null);
     const [orderNumber, setOrderNumber] = useState<string | null>(null);
-    const [tries, setTries] = useState(0);
+    const triesRef = useRef(0);
+    const MAX_TRIES = 6; // 30 seconds (6 × 5000 ms)
 
     useEffect(() => {
         if (!txnId) { setStatus('failed'); return; }
@@ -22,15 +25,16 @@ function SuccessContent() {
                 const res = await fetch(`/api/payments/status/${txnId}`);
                 const data = await res.json();
                 if (data.status === 'success') {
+                    clearCart();
                     setStatus('success');
                     setOrderId(data.order?.id ?? null);
                     setOrderNumber(data.order?.orderNumber ?? null);
                 } else if (data.status === 'failed') {
                     setStatus('failed');
                 } else {
-                    // Still pending — retry up to 6 times (30 seconds)
-                    setTries((t) => t + 1);
-                    if (tries < 6) {
+                    // Still pending — retry up to MAX_TRIES times (30 seconds)
+                    triesRef.current += 1;
+                    if (triesRef.current < MAX_TRIES) {
                         setTimeout(poll, 5000);
                     } else {
                         setStatus('pending');
@@ -42,15 +46,14 @@ function SuccessContent() {
         };
 
         poll();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [txnId]);
+    }, [txnId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (status === 'checking') {
         return (
             <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
                 <div style={{ width: '64px', height: '64px', border: '4px solid var(--leaf-200)', borderTop: '4px solid var(--leaf-600)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 2rem' }} />
                 <h2 style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Confirming Payment…</h2>
-                <p style={{ color: 'var(--gray-500)' }}>Please wait while we verify your payment with PhonePe.</p>
+                <p style={{ color: 'var(--gray-500)' }}>Please wait while we verify your payment.</p>
             </div>
         );
     }
@@ -88,12 +91,24 @@ function SuccessContent() {
             <div style={{ textAlign: 'center', padding: '4rem 2rem', maxWidth: '480px', margin: '0 auto' }}>
                 <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
                 <h2 style={{ fontWeight: 800, marginBottom: '0.5rem' }}>Payment Processing</h2>
-                <p style={{ color: 'var(--gray-600)', marginBottom: '2rem' }}>
-                    Your payment is being processed. Check your order status in a few minutes.
+                <p style={{ color: 'var(--gray-600)', marginBottom: '1.5rem' }}>
+                    Your payment is being processed. Please wait or check your payment app for the transaction status.
                 </p>
-                <button className="btn btn-primary" onClick={() => router.push('/account')}>
-                    Check My Orders
-                </button>
+                <div style={{ background: '#FFFBEB', border: '1px solid rgba(217,119,6,0.25)', borderRadius: '10px', padding: '0.875rem 1rem', marginBottom: '1.5rem', fontSize: '0.84rem', color: '#92400E' }}>
+                    ⚠️ If your bank or app shows a deduction but your order isn&apos;t confirmed, please contact support.
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <button className="btn btn-primary" onClick={() => router.push('/account')}>
+                        Check My Orders
+                    </button>
+                    <a
+                        href="mailto:support@grapemaster.in?subject=Payment%20Pending%20-%20TxnId%3A%20{txnId}"
+                        className="btn btn-outline"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                    >
+                        📧 Contact Support
+                    </a>
+                </div>
             </div>
         );
     }

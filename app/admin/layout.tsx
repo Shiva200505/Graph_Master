@@ -23,17 +23,23 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--gray-50)' }}>
             <AdminSidebar />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                {/* Top bar */}
-                <div style={{ background: 'white', borderBottom: '1px solid var(--gray-200)', padding: '0.875rem 1.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--gray-500)' }}>
-                        Logged in as <strong style={{ color: 'var(--gray-900)' }}>{session!.name}</strong>
+                {/* Top bar — padded left on mobile for the hamburger button */}
+                <div style={{
+                    background: 'white', borderBottom: '1px solid var(--gray-200)',
+                    padding: '0.875rem 1.25rem',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    flexShrink: 0, paddingLeft: 'clamp(3.5rem, 10vw, 1.75rem)',
+                }}>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--gray-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <strong style={{ color: 'var(--gray-900)' }}>{session!.name}</strong>
+                        <span className="hide-mobile"> — Admin</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
                         <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10B981' }} />
                         <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 600 }}>Live</span>
                     </div>
                 </div>
-                <main style={{ flex: 1, padding: '1.75rem', overflowY: 'auto' }}>
+                <main style={{ flex: 1, padding: 'clamp(1rem, 4vw, 1.75rem)', overflowY: 'auto', paddingLeft: 'clamp(1rem, 4vw, 1.75rem)' }}>
                     {children}
                 </main>
             </div>

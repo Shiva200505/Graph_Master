@@ -730,3 +730,90 @@ body {
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
+
+/* ================================================================
+   MOBILE RESPONSIVE UTILITIES
+================================================================ */
+
+/* ── Tablet / Small Desktop (≤ 1024px) ──────────────────────── */
+@media (max-width: 1024px) {
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  }
+}
+
+/* ── Mobile (≤ 768px) ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .container {
+    padding: 0 1rem;
+  }
+
+  .product-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .heading-xl {
+    font-size: clamp(1.6rem, 7vw, 2.4rem);
+  }
+
+  .heading-lg {
+    font-size: clamp(1.3rem, 5vw, 1.8rem);
+  }
+
+  .section {
+    padding: 2.5rem 0;
+  }
+
+  .section-sm {
+    padding: 1.75rem 0;
+  }
+
+  /* Cart drawer takes full width on mobile */
+  .cart-drawer {
+    max-width: 100%;
+  }
+
+  /* Hide elements that are irrelevant on mobile */
+  .hide-mobile {
+    display: none !important;
+  }
+
+  /* Show elements only on mobile */
+  .show-mobile {
+    display: block !important;
+  }
+
+  /* Stack pill groups on very small screens */
+  .pill-group {
+    flex-wrap: wrap;
+  }
+
+  .pill-option {
+    font-size: 0.8rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  /* Ensure admin/dealer main content isn't hidden behind fixed sidebar */
+  /* The sidebar itself uses translateX to slide in; main always has full width */
+}
+
+/* ── Small Mobile (≤ 480px) ──────────────────────────────────── */
+@media (max-width: 480px) {
+  .product-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .heading-lg {
+    font-size: 1.3rem;
+  }
+
+  .btn-lg {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  .container {
+    padding: 0 0.875rem;
+  }
+}

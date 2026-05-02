@@ -20,9 +20,12 @@ export default function PaymentFailPage() {
                 <p style={{ color: 'var(--gray-600)', marginBottom: '0.5rem' }}>
                     You cancelled the payment or it was declined. <strong>No charges were made.</strong>
                 </p>
-                <p style={{ fontSize: '0.85rem', color: 'var(--gray-500)', marginBottom: '2rem' }}>
-                    Your cart has been preserved. You can retry at any time.
+                <p style={{ fontSize: '0.85rem', color: 'var(--gray-500)', marginBottom: '0.5rem' }}>
+                    Your cart is saved — try again anytime.
                 </p>
+                <div style={{ background: '#F0FDF4', border: '1px solid rgba(22,163,74,0.2)', borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '2rem', fontSize: '0.82rem', color: '#166534' }}>
+                    🛒 All your items are still in your cart. Simply go back to checkout and complete payment.
+                </div>
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                     <button
                         className="btn btn-harvest"

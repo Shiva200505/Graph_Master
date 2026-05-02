@@ -19,6 +19,8 @@ function getClient() {
  *  - topProducts: top 5 by order count
  *  - topDealers: top 5 by revenue
  *  - ordersByFulfillment: pickup vs delivery count
+ *  - locationInsights: top 8 locations by order count
+ *  - mlStats: returning customer rate, avg items per order
  */
 export async function GET(req: NextRequest) {
     const { prisma, pool } = getClient();
@@ -35,6 +37,8 @@ export async function GET(req: NextRequest) {
             topDealers,
             fulfillmentStats,
             totalStats,
+            locationInsights,
+            mlStatsRows,
         ] = await Promise.all([
 
             // Daily revenue — last 30 days
@@ -100,7 +104,43 @@ export async function GET(req: NextRequest) {
         FROM orders
         WHERE status NOT IN ('cancelled')
       `,
+
+            // Top locations by order count — grouped by city extracted from delivery_address
+            prisma.$queryRaw<{ location: string; order_count: number; revenue: number }>`
+        SELECT
+          CASE
+            WHEN delivery_address ILIKE '%Pune%'       THEN 'Pune'
+            WHEN delivery_address ILIKE '%Nashik%'     THEN 'Nashik'
+            WHEN delivery_address ILIKE '%Shirur%'     THEN 'Shirur'
+            WHEN delivery_address ILIKE '%Ahmednagar%' THEN 'Ahmednagar'
+            WHEN delivery_address ILIKE '%Solapur%'    THEN 'Solapur'
+            WHEN delivery_address ILIKE '%Kolhapur%'   THEN 'Kolhapur'
+            WHEN delivery_address ILIKE '%Satara%'     THEN 'Satara'
+            WHEN delivery_address ILIKE '%Sangli%'     THEN 'Sangli'
+            ELSE 'Other'
+          END AS location,
+          COUNT(*)::int AS order_count,
+          ROUND(SUM(total)::numeric, 2) AS revenue
+        FROM orders
+        WHERE status NOT IN ('cancelled')
+        GROUP BY location
+        ORDER BY order_count DESC
+        LIMIT 8
+      `,
+
+            // ML stats proxy — returning customer rate + avg items per order
+            prisma.$queryRaw<{ total_orders: number; returning_customers: number; avg_items_per_order: number }[]>`
+        SELECT
+          COUNT(DISTINCT o.id)::int                    AS total_orders,
+          COUNT(DISTINCT o.user_id)::int               AS returning_customers,
+          ROUND(AVG(oi.quantity)::numeric, 1)          AS avg_items_per_order
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.status NOT IN ('cancelled')
+      `,
         ]);
+
+        const mlServiceActive = !!process.env.ML_SERVICE_URL;
 
         return NextResponse.json({
             dailyRevenue,
@@ -109,6 +149,11 @@ export async function GET(req: NextRequest) {
             topDealers,
             fulfillmentStats,
             totalStats: totalStats[0] ?? { totalOrders: 0, totalRevenue: 0, avgOrderValue: 0 },
+            locationInsights,
+            mlStats: {
+                ...(mlStatsRows[0] ?? { total_orders: 0, returning_customers: 0, avg_items_per_order: 0 }),
+                mlServiceActive,
+            },
         });
     } catch (err) {
         console.error('[analytics]', err);

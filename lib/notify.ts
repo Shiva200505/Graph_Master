@@ -28,6 +28,7 @@ export async function sendWhatsAppConfirmation(order: OrderNotifyPayload): Promi
     const token = process.env.WHATSAPP_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_ID;
     const template = process.env.WHATSAPP_TEMPLATE ?? 'order_confirmation';
+    const useTextFallback = template === 'text_fallback';
 
     if (!token || !phoneId) {
         // Development fallback — log to console
@@ -42,27 +43,55 @@ export async function sendWhatsAppConfirmation(order: OrderNotifyPayload): Promi
     // Normalize phone: strip non-digits, ensure 91 prefix
     const toPhone = `91${order.customerPhone.replace(/\D/g, '').slice(-10)}`;
 
-    const body = {
-        messaging_product: 'whatsapp',
-        to: toPhone,
-        type: 'template',
-        template: {
-            name: template,
-            language: { code: 'en' },
-            components: [
-                {
-                    type: 'body',
-                    parameters: [
-                        { type: 'text', text: order.customerName },
-                        { type: 'text', text: order.orderNumber },
-                        { type: 'text', text: order.dealerName },
-                        { type: 'text', text: `₹${order.total.toLocaleString('en-IN')}` },
-                        { type: 'text', text: order.fulfillmentType === 'pickup' ? 'Store Pickup' : 'Home Delivery' },
-                    ],
-                },
-            ],
-        },
-    };
+    // ── Build message body ─────────────────────────────────────────────────────
+    let body: Record<string, unknown>;
+
+    if (useTextFallback) {
+        // Plain text mode — no Meta template approval required.
+        // Useful for testing / early deployment.
+        // Note: Only works for users who have messaged your number first (24-hour window).
+        const itemsList = order.items
+            .map((i) => `• ${i.productName} × ${i.quantity}`)
+            .join('\n');
+        const textBody =
+            `GrapeMaster Order Confirmed! 🌿\n` +
+            `Order: #${order.orderNumber}\n` +
+            `Items:\n${itemsList}\n` +
+            `Total: ₹${order.total.toLocaleString('en-IN')}\n` +
+            `Dealer: ${order.dealerName}\n` +
+            `Type: ${order.fulfillmentType === 'pickup' ? 'Store Pickup' : 'Home Delivery'}\n` +
+            `Thank you for ordering from GrapeMaster!`;
+
+        body = {
+            messaging_product: 'whatsapp',
+            to: toPhone,
+            type: 'text',
+            text: { preview_url: false, body: textBody },
+        };
+    } else {
+        // Approved template mode
+        body = {
+            messaging_product: 'whatsapp',
+            to: toPhone,
+            type: 'template',
+            template: {
+                name: template,
+                language: { code: 'en' },
+                components: [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: order.customerName },
+                            { type: 'text', text: order.orderNumber },
+                            { type: 'text', text: order.dealerName },
+                            { type: 'text', text: `₹${order.total.toLocaleString('en-IN')}` },
+                            { type: 'text', text: order.fulfillmentType === 'pickup' ? 'Store Pickup' : 'Home Delivery' },
+                        ],
+                    },
+                ],
+            },
+        };
+    }
 
     try {
         const res = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
@@ -72,9 +101,9 @@ export async function sendWhatsAppConfirmation(order: OrderNotifyPayload): Promi
         });
         if (!res.ok) {
             const err = await res.text();
-            console.error('[WhatsApp] Send failed:', err);
+            console.error(`[WhatsApp] Send failed (${useTextFallback ? 'text' : 'template'}):`, err);
         } else {
-            console.log(`[WhatsApp] Sent to ${toPhone} for order #${order.orderNumber}`);
+            console.log(`[WhatsApp] Sent to ${toPhone} for order #${order.orderNumber} (${useTextFallback ? 'text_fallback' : template})`);
         }
     } catch (err) {
         console.error('[WhatsApp] Network error:', err);

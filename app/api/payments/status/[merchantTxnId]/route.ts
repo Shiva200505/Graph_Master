@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@/app/generated/prisma';
-import { checkPhonePeStatus } from '@/lib/phonepe';
-
 export const dynamic = 'force-dynamic';
 
 function getClient() {
@@ -40,15 +38,6 @@ export async function GET(
             return NextResponse.json({ status: 'success', order: payment.order });
         }
         if (payment.status === 'failed') {
-            return NextResponse.json({ status: 'failed', order: payment.order });
-        }
-
-        // Still pending — check with PhonePe live
-        const ppStatus = await checkPhonePeStatus(merchantTxnId);
-
-        if (ppStatus.success) {
-            return NextResponse.json({ status: 'success', order: payment.order });
-        } else if (ppStatus.code === 'PAYMENT_ERROR') {
             return NextResponse.json({ status: 'failed', order: payment.order });
         }
 

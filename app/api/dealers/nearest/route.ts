@@ -52,8 +52,12 @@ export async function GET(req: NextRequest) {
             })),
         });
     } catch (err) {
-        console.error('[API/dealers/nearest] error:', err);
-        return NextResponse.json({ error: 'Failed to find nearest dealer' }, { status: 500 });
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('[API/dealers/nearest] error:', message, err);
+        return NextResponse.json(
+            { error: 'Failed to find nearest dealer', code: 'DB_QUERY_FAILED' },
+            { status: 500 }
+        );
     } finally {
         await pool.end();
     }

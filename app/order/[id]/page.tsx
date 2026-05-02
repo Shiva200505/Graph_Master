@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import OrderTimeline from '@/components/ui/OrderTimeline';
 
 interface OrderData {
     id: string;
@@ -12,6 +13,7 @@ interface OrderData {
     deliveryAddress: string;
     fulfillmentType: string;
     status: string;
+    paymentStatus: string | null;
     subtotal: number;
     deliveryCharge: number;
     total: number;
@@ -86,8 +88,17 @@ export default function OrderConfirmationPage() {
                         </div>
                     </div>
 
+                    {/* ── Order Timeline ── */}
+                    <div style={{ padding: '1.25rem 2rem 0' }}>
+                        <OrderTimeline
+                            status={order.status}
+                            createdAt={order.createdAt}
+                            fulfillmentType={order.fulfillmentType}
+                        />
+                    </div>
+
                     {/* Body */}
-                    <div style={{ padding: '1.75rem 2rem' }}>
+                    <div style={{ padding: '0 2rem 1.75rem' }}>
 
                         {/* Fulfillment & Dealer */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -150,14 +161,68 @@ export default function OrderConfirmationPage() {
                             </div>
                         </div>
 
-                        {/* COD Notice */}
-                        <div style={{ background: 'var(--harvest-50)', border: '1px solid rgba(224,143,0,0.25)', borderRadius: 'var(--radius)', padding: '1rem', marginBottom: '1.75rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                            <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>💵</span>
-                            <div>
-                                <div style={{ fontWeight: 700, color: 'var(--harvest-700)', marginBottom: '0.2rem', fontSize: '0.9rem' }}>Cash on Delivery</div>
-                                <div className="body-sm">Pay <strong>₹{order.total.toLocaleString('en-IN')}</strong> in cash when you {isDelivery ? 'receive your delivery' : 'collect your order from the store'}. No advance payment needed.</div>
+                        {/* Payment Status */}
+                        {order.paymentStatus === 'paid' ? (
+                            <div style={{ background: '#F0FDF4', border: '1px solid rgba(22,163,74,0.3)', borderRadius: 'var(--radius)', padding: '1rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#22C55E', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                </div>
+                                <div>
+                                    <div style={{ fontWeight: 700, color: '#15803D', marginBottom: '0.2rem', fontSize: '0.9rem' }}>Paid Online ✓</div>
+                                    <div style={{ fontSize: '0.82rem', color: '#166534' }}>Payment Confirmed — your order is being processed.</div>
+                                </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div style={{ background: '#FFFBEB', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 'var(--radius)', padding: '1rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                </div>
+                                <div>
+                                    <div style={{ fontWeight: 700, color: '#B45309', marginBottom: '0.2rem', fontSize: '0.9rem' }}>Payment Pending</div>
+                                    <div style={{ fontSize: '0.82rem', color: '#92400E' }}>Check your payment app to confirm the payment status.</div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Order Status Stepper */}
+                        {(() => {
+                            const steps = ['placed', 'confirmed', 'dispatched', 'delivered'];
+                            const labels = ['Placed', 'Confirmed', 'Dispatched', 'Delivered'];
+                            const icons = ['📋', '✅', '🚚', '🎉'];
+                            const currentIdx = steps.indexOf(order.status.toLowerCase());
+                            const activeIdx = currentIdx >= 0 ? currentIdx : 0;
+                            return (
+                                <div style={{ marginBottom: '1.75rem', padding: '1.25rem 1rem', background: 'var(--gray-50)', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius)' }}>
+                                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--gray-400)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>Order Status</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                                        {steps.map((step, idx) => {
+                                            const done = idx <= activeIdx;
+                                            const active = idx === activeIdx;
+                                            return (
+                                                <div key={step} style={{ display: 'flex', alignItems: 'center', flex: idx < steps.length - 1 ? 1 : 'none' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem' }}>
+                                                        <div style={{
+                                                            width: '36px', height: '36px', borderRadius: '50%',
+                                                            background: done ? (active ? 'var(--leaf-600)' : '#22C55E') : 'var(--gray-200)',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            fontSize: '1rem',
+                                                            boxShadow: active ? '0 0 0 3px rgba(42,116,54,0.2)' : 'none',
+                                                            transition: 'all 0.3s',
+                                                        }}>{icons[idx]}</div>
+                                                        <div style={{ fontSize: '0.62rem', fontWeight: active ? 700 : 500, color: done ? (active ? 'var(--leaf-700)' : '#15803D') : 'var(--gray-400)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                                            {labels[idx]}
+                                                        </div>
+                                                    </div>
+                                                    {idx < steps.length - 1 && (
+                                                        <div style={{ flex: 1, height: '3px', background: idx < activeIdx ? '#22C55E' : 'var(--gray-200)', margin: '0 4px', marginBottom: '20px', borderRadius: '2px', transition: 'background 0.3s' }} />
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Actions */}
                         <div style={{ display: 'flex', gap: '0.75rem' }}>
