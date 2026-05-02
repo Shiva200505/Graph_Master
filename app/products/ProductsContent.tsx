@@ -258,6 +258,28 @@ export default function ProductsPageContent() {
 
             {/* ── Products ── */}
             <div className="container" style={{ padding: '2rem 1.5rem 4rem' }}>
+                {!dealerId && (
+                  <div style={{
+                    background: 'linear-gradient(135deg, #1A4D25, #2A7436)',
+                    borderRadius: '14px', padding: '1.25rem 1.5rem',
+                    marginBottom: '1.5rem', display: 'flex',
+                    alignItems: 'center', justifyContent: 'space-between',
+                    gap: '1rem', flexWrap: 'wrap'
+                  }}>
+                    <div>
+                      <div style={{ color: 'white', fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+                        📍 Select your location first
+                      </div>
+                      <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.82rem' }}>
+                        We'll match you to the nearest dealer with live prices and stock.
+                      </div>
+                    </div>
+                    <a href="/" className="btn" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', flexShrink: 0, fontSize: '0.85rem' }}>
+                      Choose Location →
+                    </a>
+                  </div>
+                )}
+
                 {error && (
                     <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 'var(--radius)', padding: '0.875rem 1rem', color: '#DC2626', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem' }}>
                         <span>⚠️</span> {error}

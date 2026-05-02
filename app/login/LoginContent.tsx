@@ -9,6 +9,7 @@ export default function CustomerLoginPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const next = searchParams.get('next') ?? '/account';
+    const reason = searchParams.get('reason');
 
     const [step, setStep] = useState<Step>('phone');
     const [phone, setPhone] = useState('');
@@ -83,6 +84,17 @@ export default function CustomerLoginPage() {
                             {step === 'phone' ? 'Sign In with OTP' : `OTP sent to +91 ${phone}`}
                         </div>
                     </div>
+
+                    {reason === 'session_expired' && (
+                        <div style={{ 
+                            background: '#FEF3C7', border: '1px solid rgba(217,119,6,0.2)', 
+                            borderRadius: '10px', padding: '0.625rem 0.875rem',
+                            marginBottom: '1.25rem', fontSize: '0.82rem', color: '#92400E',
+                            display: 'flex', gap: '0.4rem', alignItems: 'center'
+                        }}>
+                            ⏱️ Your session expired. Please log in again.
+                        </div>
+                    )}
 
                     {step === 'phone' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import StatusBadge from '@/components/admin/StatusBadge';
 import OrderTimeline from '@/components/ui/OrderTimeline';
+import Breadcrumb from '@/components/ui/Breadcrumb';
 
 const STATUSES = ['pending', 'confirmed', 'dispatched', 'delivered', 'cancelled'];
 
@@ -127,11 +128,10 @@ export default function AdminOrderDetailPage() {
     return (
         <div style={{ maxWidth: '960px' }}>
             {/* Breadcrumb */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', fontSize: '0.82rem', color: 'var(--gray-400)' }}>
-                <button onClick={() => router.push('/admin/orders')} style={{ background: 'none', border: 'none', color: 'var(--leaf-600)', cursor: 'pointer', fontWeight: 600 }}>Orders</button>
-                <span>›</span>
-                <span style={{ color: 'var(--gray-700)', fontWeight: 600 }}>#{order.orderNumber}</span>
-            </div>
+            <Breadcrumb items={[
+                { label: 'Orders', href: '/admin/orders' },
+                { label: `#${order.orderNumber}` }
+            ]} />
 
             {/* Header row */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>

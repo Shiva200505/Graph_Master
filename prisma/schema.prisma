@@ -38,6 +38,7 @@ model Dealer {
   passwordHash     String?                   @map("password_hash") @db.VarChar(255)
   inventory        DealerInventory[]
   orders           Order[]
+  productRequests  ProductRequest[]
 
   @@index([location], type: Gist)
   @@index([isActive])
@@ -208,6 +209,27 @@ model ProductAssociation {
   @@id([productA, productB])
   @@index([productA])
   @@map("product_associations")
+}
+
+model ProductRequest {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dealerId       String   @map("dealer_id") @db.Uuid
+  productName    String   @map("product_name") @db.VarChar(200)
+  category       String   @db.VarChar(50)
+  unit           String   @db.VarChar(20)
+  estimatedPrice Decimal  @map("estimated_price") @db.Decimal(10, 2)
+  description    String?  @db.Text
+  reason         String?  @db.Text
+  status         String   @default("pending") @db.VarChar(20)
+  adminNote      String?  @map("admin_note") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  dealer Dealer @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@index([status])
+  @@map("product_requests")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.

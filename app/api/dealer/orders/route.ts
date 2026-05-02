@@ -8,12 +8,21 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') ?? 'all';
+    const search = searchParams.get('search') ?? '';
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
-    const limit = 15;
+    const limit = 10;
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = { dealerId: session.id };
+    const where: any = { dealerId: session.id };
     if (status !== 'all') where.status = status;
+    
+    if (search) {
+      where.OR = [
+        { customerName: { contains: search, mode: 'insensitive' } },
+        { customerPhone: { contains: search } },
+        { orderNumber: { contains: search, mode: 'insensitive' } },
+      ];
+    }
 
     try {
         const [orders, total] = await Promise.all([

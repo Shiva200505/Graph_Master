@@ -22,6 +22,8 @@ interface OrderNotifyPayload {
     orderId: string;
 }
 
+import { addDevNotification } from './devNotifications';
+
 // ─── WhatsApp ─────────────────────────────────────────────────────────────────
 
 export async function sendWhatsAppConfirmation(order: OrderNotifyPayload): Promise<void> {
@@ -37,6 +39,12 @@ export async function sendWhatsAppConfirmation(order: OrderNotifyPayload): Promi
         console.log(`   Order #${order.orderNumber} · ₹${order.total}`);
         console.log(`   Dealer: ${order.dealerName}`);
         console.log(`   Type: ${order.fulfillmentType}`);
+        addDevNotification({
+            type: 'whatsapp',
+            to: `+91${order.customerPhone}`,
+            message: `Order #${order.orderNumber} · ₹${order.total} · Dealer: ${order.dealerName} · Type: ${order.fulfillmentType}`,
+            timestamp: new Date().toISOString(),
+        });
         return;
     }
 
@@ -159,6 +167,12 @@ export async function sendAdminOrderEmail(order: OrderNotifyPayload): Promise<vo
         console.log('\n📧 [Email MOCK] Admin order alert:');
         console.log(`   To: ${adminEmail}`);
         console.log(`   Subject: New Order #${order.orderNumber} — ₹${order.total}`);
+        addDevNotification({
+            type: 'email',
+            to: adminEmail,
+            message: `New Order #${order.orderNumber} — ₹${order.total}`,
+            timestamp: new Date().toISOString(),
+        });
         return;
     }
 

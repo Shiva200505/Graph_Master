@@ -9,9 +9,9 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') ?? 'all';
     const search = searchParams.get('search') ?? '';
-    const limitParam = searchParams.get('limit') ?? '20';
+    const limitParam = searchParams.get('limit') ?? '10';
     const isAll = limitParam === 'all';
-    const limit = isAll ? 1000 : Math.min(parseInt(limitParam) || 20, 200);
+    const limit = isAll ? 1000 : Math.min(parseInt(limitParam) || 10, 200);
     const page = isAll ? 1 : Math.max(1, parseInt(searchParams.get('page') ?? '1'));
     const skip = isAll ? 0 : (page - 1) * limit;
 

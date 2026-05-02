@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 const NAV = [
     { href: '/admin', label: 'Dashboard', icon: '📊' },
     { href: '/admin/orders', label: 'Orders', icon: '📦' },
+    { href: '/admin/payments', label: 'Payments', icon: '💳' },
     { href: '/admin/dealers', label: 'Dealers', icon: '🏪' },
     { href: '/admin/inventory', label: 'Inventory', icon: '🗂️' },
     { href: '/admin/products', label: 'Products', icon: '🌾' },
@@ -18,12 +19,20 @@ export default function AdminSidebar() {
     const pathname = usePathname();
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [pendingRequests, setPendingRequests] = useState(0);
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 768);
         check();
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
+    }, []);
+
+    useEffect(() => {
+        fetch('/api/admin/product-requests')
+            .then(r => r.json())
+            .then(d => setPendingRequests(d.total || 0))
+            .catch(() => {});
     }, []);
 
     // Close sidebar when navigating on mobile
@@ -124,6 +133,17 @@ export default function AdminSidebar() {
                             }}>
                                 <span style={{ fontSize: '1rem' }}>{item.icon}</span>
                                 {item.label}
+                                {item.label === 'Products' && pendingRequests > 0 && (
+                                    <span style={{ 
+                                        marginLeft: 'auto',
+                                        background: '#EF4444', color: 'white',
+                                        borderRadius: '10px', padding: '1px 7px',
+                                        fontSize: '0.65rem', fontWeight: 700,
+                                        minWidth: '18px', textAlign: 'center'
+                                    }}>
+                                        {pendingRequests}
+                                    </span>
+                                )}
                             </a>
                         );
                     })}

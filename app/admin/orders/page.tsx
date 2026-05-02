@@ -44,22 +44,23 @@ export default function AdminOrdersPage() {
     // ── Inline status update ────────────────────────────────────────────────
     const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-    const fetchOrders = useCallback(async () => {
+    const fetchOrders = useCallback(async (pageNum = 1, append = false) => {
         setLoading(true);
-        const params = new URLSearchParams({ status, page: String(page), limit: '20' });
+        const params = new URLSearchParams({ status, page: String(pageNum), limit: '10' });
         if (search) params.set('search', search);
         if (dateFrom) params.set('from', dateFrom);
         if (dateTo) params.set('to', dateTo);
         const res = await fetch(`/api/admin/orders?${params}`);
         const data = await res.json();
-        setOrders(data.orders ?? []);
+        setOrders(prev => append ? [...prev, ...(data.orders ?? [])] : (data.orders ?? []));
         setTotal(data.total ?? 0);
         setTotalPages(data.totalPages ?? 1);
-        setSelected(new Set()); // clear selection on refetch
+        setPage(pageNum);
+        if (!append) setSelected(new Set()); // clear selection only on new fetch
         setLoading(false);
-    }, [status, search, page, dateFrom, dateTo]);
+    }, [status, search, dateFrom, dateTo]);
 
-    useEffect(() => { fetchOrders(); }, [fetchOrders]);
+    useEffect(() => { fetchOrders(1, false); }, [fetchOrders]);
 
     // ── Inline status update per row ────────────────────────────────────────
     const handleInlineStatus = async (orderId: string, newStatus: string) => {
@@ -172,23 +173,23 @@ export default function AdminOrdersPage() {
             <div style={{ background: 'white', border: '1px solid var(--gray-200)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
                 {/* Search */}
                 <input className="input" placeholder="Search order#, customer..." value={search}
-                    onChange={e => { setSearch(e.target.value); setPage(1); }}
+                    onChange={e => setSearch(e.target.value)}
                     style={{ width: '220px', fontSize: '0.84rem' }} />
 
                 {/* Date range */}
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--gray-600)' }}>
                     <span style={{ fontWeight: 600, color: 'var(--gray-400)', fontSize: '0.75rem' }}>FROM</span>
-                    <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }}
+                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
                         className="input" style={{ width: '140px', fontSize: '0.82rem', padding: '0.4rem 0.6rem' }} />
                     <span style={{ color: 'var(--gray-300)' }}>—</span>
-                    <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }}
+                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
                         className="input" style={{ width: '140px', fontSize: '0.82rem', padding: '0.4rem 0.6rem' }} />
                 </div>
 
                 {/* Status pills */}
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                     {STATUSES.map(s => (
-                        <button key={s} onClick={() => { setStatus(s); setPage(1); }} style={{
+                        <button key={s} onClick={() => setStatus(s)} style={{
                             padding: '0.3rem 0.65rem', borderRadius: '20px', border: '1.5px solid',
                             borderColor: status === s ? 'var(--leaf-600)' : 'var(--gray-200)',
                             background: status === s ? 'var(--leaf-600)' : 'white',
@@ -311,14 +312,15 @@ export default function AdminOrdersPage() {
                     </table>
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div style={{ padding: '0.875rem 1.25rem', borderTop: '1px solid var(--gray-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>Page {page} of {totalPages} · {total} orders</span>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button disabled={page === 1} onClick={() => setPage(p => p - 1)} style={{ padding: '0.35rem 0.75rem', border: '1px solid var(--gray-200)', borderRadius: '8px', background: 'white', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.4 : 1, fontSize: '0.82rem' }}>← Prev</button>
-                            <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} style={{ padding: '0.35rem 0.75rem', border: '1px solid var(--gray-200)', borderRadius: '8px', background: 'white', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.4 : 1, fontSize: '0.82rem' }}>Next →</button>
-                        </div>
+                {/* Load More */}
+                {page < totalPages && (
+                    <div style={{ padding: '1.25rem', borderTop: '1px solid var(--gray-100)', textAlign: 'center' }}>
+                        <button 
+                            onClick={() => fetchOrders(page + 1, true)} 
+                            disabled={loading}
+                            style={{ padding: '0.5rem 1.5rem', background: 'white', border: '1px solid var(--gray-300)', borderRadius: '8px', fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-700)', cursor: 'pointer' }}>
+                            {loading ? 'Loading...' : 'Load More ↓'}
+                        </button>
                     </div>
                 )}
             </div>

@@ -25,19 +25,28 @@ export default function DealerOrdersPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
     const [updating, setUpdating] = useState<string | null>(null);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
 
-    const fetchOrders = useCallback(async () => {
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search), 400);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    const fetchOrders = useCallback(async (pageNum = 1, append = false) => {
         setLoading(true);
-        const params = new URLSearchParams({ status, page: String(page) });
+        const params = new URLSearchParams({ status, page: String(pageNum) });
+        if (debouncedSearch) params.set('search', debouncedSearch);
         const res = await fetch(`/api/dealer/orders?${params}`);
         const data = await res.json();
-        setOrders(data.orders ?? []);
+        setOrders(prev => append ? [...prev, ...(data.orders ?? [])] : (data.orders ?? []));
         setTotal(data.total ?? 0);
         setTotalPages(data.totalPages ?? 1);
+        setPage(pageNum);
         setLoading(false);
-    }, [status, page]);
+    }, [status, debouncedSearch]);
 
-    useEffect(() => { fetchOrders(); }, [fetchOrders]);
+    useEffect(() => { fetchOrders(1, false); }, [fetchOrders]);
 
     const handleStatusUpdate = async (id: string, nextStatus: string) => {
         setUpdating(id);
@@ -52,15 +61,24 @@ export default function DealerOrdersPage() {
 
     return (
         <div>
-            <div style={{ marginBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.03em' }}>My Orders</h1>
-                <p style={{ color: 'var(--gray-500)', fontSize: '0.84rem', marginTop: '0.25rem' }}>{total} total orders</p>
+            <div style={{ marginBottom: '1.5rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                    <h1 style={{ fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.03em' }}>My Orders</h1>
+                    <p style={{ color: 'var(--gray-500)', fontSize: '0.84rem', marginTop: '0.25rem' }}>{total} total orders</p>
+                </div>
+                <input 
+                    type="text" 
+                    placeholder="Search name, phone, or order #" 
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid var(--gray-300)', minWidth: '250px', fontSize: '0.85rem' }}
+                />
             </div>
 
             {/* Status tabs */}
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
                 {STATUSES.map(s => (
-                    <button key={s} onClick={() => { setStatus(s); setPage(1); }}
+                    <button key={s} onClick={() => setStatus(s)}
                         style={{ padding: '0.35rem 0.875rem', borderRadius: '20px', border: '1.5px solid', borderColor: status === s ? '#8B5CF6' : 'var(--gray-200)', background: status === s ? '#8B5CF6' : 'white', color: status === s ? 'white' : 'var(--gray-600)', fontWeight: status === s ? 700 : 500, fontSize: '0.78rem', cursor: 'pointer', textTransform: 'capitalize' }}>
                         {s === 'all' ? 'All' : s}
                     </button>
@@ -109,18 +127,25 @@ export default function DealerOrdersPage() {
                                         Cancel
                                     </button>
                                 )}
+                                <a href={`/dealer/orders/${o.id}/print`} target="_blank" rel="noopener noreferrer"
+                                    style={{ padding: '0.35rem 0.7rem', border: '1px solid var(--gray-300)', borderRadius: '8px', fontWeight: 600, fontSize: '0.76rem', cursor: 'pointer', background: 'white', color: 'var(--gray-700)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                                    🖨️ Print Slip
+                                </a>
                             </div>
                         </div>
                     ))
                 }
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1.25rem' }}>
-                    <button disabled={page === 1} onClick={() => setPage(p => p - 1)} style={{ padding: '0.4rem 0.875rem', border: '1px solid var(--gray-200)', borderRadius: '8px', background: 'white', cursor: 'pointer', opacity: page === 1 ? 0.4 : 1, fontSize: '0.82rem' }}>← Prev</button>
-                    <span style={{ padding: '0.4rem 0.875rem', fontSize: '0.82rem', color: 'var(--gray-500)' }}>Page {page} / {totalPages}</span>
-                    <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} style={{ padding: '0.4rem 0.875rem', border: '1px solid var(--gray-200)', borderRadius: '8px', background: 'white', cursor: 'pointer', opacity: page === totalPages ? 0.4 : 1, fontSize: '0.82rem' }}>Next →</button>
+            {/* Load More */}
+            {page < totalPages && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.25rem' }}>
+                    <button 
+                        onClick={() => fetchOrders(page + 1, true)} 
+                        disabled={loading}
+                        style={{ padding: '0.6rem 1.5rem', background: 'white', border: '1px solid var(--gray-300)', borderRadius: '20px', fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-700)', cursor: 'pointer' }}>
+                        {loading ? 'Loading...' : 'Load More ↓'}
+                    </button>
                 </div>
             )}
         </div>

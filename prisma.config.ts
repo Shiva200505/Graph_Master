@@ -11,6 +11,7 @@ export default defineConfig({
   },
   datasource: {
     url: process.env["DATABASE_URL"],
+    // @ts-ignore - Supabase requires this but TS might complain
     directUrl: process.env["DIRECT_URL"],
   },
 });

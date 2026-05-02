@@ -13,6 +13,7 @@ export async function GET() {
             include: {
                 _count: { select: { orders: true } },
                 orders: { where: { status: { not: 'cancelled' } }, select: { total: true } },
+                inventory: { where: { quantity: { lt: 10 } }, select: { id: true } },
             },
         });
 
@@ -27,6 +28,7 @@ export async function GET() {
                 coverageRadiusKm: Number(d.coverageRadiusKm),
                 orderCount: d._count.orders,
                 totalRevenue: d.orders.reduce((s, o) => s + Number(o.total), 0),
+                lowStockCount: d.inventory.length,
                 createdAt: d.createdAt,
             })),
         });

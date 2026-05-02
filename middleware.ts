@@ -164,7 +164,9 @@ export async function middleware(req: NextRequest) {
             const { payload } = await jwtVerify(token, SECRET);
             if (payload.role !== 'customer') throw new Error('not customer');
         } catch {
-            return NextResponse.redirect(new URL('/login?next=/account', req.url));
+            const res = NextResponse.redirect(new URL('/login?next=/account&reason=session_expired', req.url));
+            res.cookies.delete(COOKIE);
+            return res;
         }
     }
 

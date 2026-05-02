@@ -95,6 +95,11 @@ export default function DealerLoginPage() {
                     <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
                         <a href="/" style={{ fontSize: '0.8rem', color: 'var(--gray-400)', textDecoration: 'none' }}>← Back to Storefront</a>
                     </div>
+                    <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
+                        <a href="/admin/login" style={{ fontSize: '0.78rem', color: 'rgba(0,0,0,0.3)', textDecoration: 'none' }}>
+                            Admin? → Admin Panel
+                        </a>
+                    </div>
                 </div>
 
                 <div style={{ textAlign: 'center', marginTop: '1rem', color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>

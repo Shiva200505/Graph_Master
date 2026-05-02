@@ -48,11 +48,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <div>
                   <div style={{ fontWeight: 700, color: 'var(--gray-300)', fontSize: '0.8rem', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.875rem' }}>Quick Links</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {[['Home', '/'], ['Products', '/products'], ['Checkout', '/checkout']].map(([label, href]) => (
+                    {[['Home', '/'], ['Products', '/products'], ['Checkout', '/checkout'], ['Admin Panel', '/admin/login'], ['Dealer Portal', '/dealer/login']].map(([label, href]) => (
                       <a key={href} href={href} className="footer-link" style={{ fontSize: '0.85rem', color: 'var(--gray-500)', textDecoration: 'none' }}>
                         {label}
                       </a>
                     ))}
+                  </div>
+                </div>
+                {/* Portals */}
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--gray-300)', fontSize: '0.8rem', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.875rem' }}>Portals</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <a href="/admin/login" className="footer-link" style={{ fontSize: '0.85rem', color: 'var(--gray-500)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      🔐 Admin Panel
+                    </a>
+                    <a href="/dealer/login" className="footer-link" style={{ fontSize: '0.85rem', color: 'var(--gray-500)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      🏪 Dealer Portal
+                    </a>
                   </div>
                 </div>
                 {/* Contact */}

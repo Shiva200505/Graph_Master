@@ -16,12 +16,20 @@ export default function AdminDashboard() {
     const router = useRouter();
     const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState(true);
+    const [devNotes, setDevNotes] = useState<any[]>([]);
 
     useEffect(() => {
         fetch('/api/admin/stats')
             .then(r => r.json())
             .then(d => setStats(d))
             .finally(() => setLoading(false));
+            
+        if (process.env.NODE_ENV !== 'production') {
+            fetch('/api/admin/dev-notifications')
+                .then(r => r.json())
+                .then(d => setDevNotes(d.notifications ?? []))
+                .catch(() => {});
+        }
     }, []);
 
     const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
@@ -120,6 +128,26 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             </div>
+
+            {/* Dev Notifications (Only in Development) */}
+            {process.env.NODE_ENV !== 'production' && devNotes.length > 0 && (
+                <div style={{ marginTop: '2rem', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '14px', padding: '1.25rem' }}>
+                    <div style={{ fontWeight: 800, color: '#92400E', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span>🛠️</span> Dev: Recent Notifications
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {devNotes.map((n, i) => (
+                            <div key={i} style={{ background: 'white', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.82rem', border: '1px solid #FDE68A' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: 'var(--gray-500)', fontSize: '0.75rem' }}>
+                                    <span style={{ fontWeight: 700, color: n.type === 'whatsapp' ? '#16A34A' : '#4F46E5' }}>{n.type.toUpperCase()} → {n.to}</span>
+                                    <span>{new Date(n.timestamp).toLocaleTimeString()}</span>
+                                </div>
+                                <div style={{ color: 'var(--gray-900)' }}>{n.message}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

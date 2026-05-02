@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import StatusBadge from '@/components/admin/StatusBadge';
+import Breadcrumb from '@/components/ui/Breadcrumb';
 
 interface DealerDetail {
     id: string; name: string; phone: string; email: string; address: string;
@@ -154,10 +155,10 @@ export default function AdminDealerDetailPage() {
         <div>
             {showResetModal && <ResetPasswordModal id={id} onClose={() => setShowResetModal(false)} />}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', fontSize: '0.82rem', color: 'var(--gray-400)' }}>
-                <button onClick={() => router.push('/admin/dealers')} style={{ background: 'none', border: 'none', color: 'var(--leaf-600)', cursor: 'pointer', fontWeight: 600 }}>Dealers</button>
-                <span>›</span><span style={{ color: 'var(--gray-700)', fontWeight: 600 }}>{dealer.name}</span>
-            </div>
+            <Breadcrumb items={[
+                { label: 'Dealers', href: '/admin/dealers' },
+                { label: dealer.name }
+            ]} />
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <div>

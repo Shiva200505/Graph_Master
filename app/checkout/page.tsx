@@ -35,16 +35,41 @@ export default function CheckoutPage() {
     const { locationName, lat: userLat, lng: userLng } = useLocationStore();
 
     const [form, setForm] = useState<FormData>({ name: '', phone: '', address: '' });
+    const [isSavedAddress, setIsSavedAddress] = useState(false);
     const [errors, setErrors] = useState<Partial<FormData>>({});
     const [placing, setPlacing] = useState(false);
     const [apiError, setApiError] = useState('');
     const [isMobile, setIsMobile] = useState(false);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => { setMounted(true); }, []);
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 768);
         check();
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
+    }, []);
+
+    useEffect(() => {
+        if (mounted && items.length === 0) {
+            const timer = setTimeout(() => router.push('/products'), 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [items.length, mounted, router]);
+
+    useEffect(() => {
+        const savedAddress = localStorage.getItem('gm_saved_address');
+        const savedName = localStorage.getItem('gm_saved_name');
+        const savedPhone = localStorage.getItem('gm_saved_phone');
+        if (savedName || savedPhone || savedAddress) {
+            setForm({
+                name: savedName || '',
+                phone: savedPhone || '',
+                address: savedAddress || '',
+            });
+            setIsSavedAddress(!!savedAddress);
+        }
     }, []);
 
     // ── Dynamic delivery charge state ──────────────────────────────────────────
@@ -157,6 +182,9 @@ export default function CheckoutPage() {
                         });
                         const verifyData = await verifyRes.json();
                         if (verifyData.success) {
+                            localStorage.setItem('gm_saved_address', form.address.trim());
+                            localStorage.setItem('gm_saved_name', form.name.trim());
+                            localStorage.setItem('gm_saved_phone', form.phone.trim());
                             clearCart();
                             router.push(`/payment/success?txnId=${data.merchantTxnId}`);
                         } else {
@@ -202,6 +230,11 @@ export default function CheckoutPage() {
                     <h2 className="heading-md" style={{ marginBottom: '0.5rem' }}>Your Cart is Empty</h2>
                     <p className="body-sm" style={{ marginBottom: '2rem' }}>Browse our product catalogue and add items to your cart before checking out.</p>
                     <a href="/products" className="btn btn-primary">Browse Products</a>
+                    {mounted && (
+                        <p style={{ marginTop: '1.5rem', fontSize: '0.8rem', color: 'var(--gray-400)' }}>
+                            Redirecting to products in 2 seconds...
+                        </p>
+                    )}
                 </div>
             </div>
         );
@@ -275,8 +308,13 @@ export default function CheckoutPage() {
 
                                 {fulfillmentType === 'delivery' && (
                                     <div>
-                                        <label className="input-label">Delivery Address *</label>
-                                        <textarea className={`input ${errors.address ? 'error' : ''}`} placeholder="Plot no., Street, Village / City, District, Pincode" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={3} style={{ resize: 'vertical' }} />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '0.4rem' }}>
+                                            <label className="input-label" style={{ marginBottom: 0 }}>Delivery Address *</label>
+                                            {isSavedAddress && (
+                                                <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 600 }}>✓ Using saved address</span>
+                                            )}
+                                        </div>
+                                        <textarea className={`input ${errors.address ? 'error' : ''}`} placeholder="Plot no., Street, Village / City, District, Pincode" value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setIsSavedAddress(false); }} rows={3} style={{ resize: 'vertical' }} />
                                         {errors.address && <div className="input-error">{errors.address}</div>}
 
                                         {/* Delivery charge preview */}

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 interface Dealer {
     id: string; name: string; phone: string; email: string; address: string;
     isActive: boolean; orderCount: number; totalRevenue: number; coverageRadiusKm: number; createdAt: string;
+    lowStockCount?: number;
 }
 
 interface FormData {
@@ -206,6 +207,39 @@ export default function AdminDealersPage() {
                             </button>
                         </div>
                     </form>
+                </div>
+            )}
+
+            {/* ── Performance Summary ── */}
+            {!loading && dealers.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div style={{ background: 'white', border: '1px solid var(--gray-200)', borderRadius: '12px', padding: '1.25rem', boxShadow: 'var(--shadow-xs)' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>🏆 Top Revenue</div>
+                        {[...dealers].sort((a, b) => b.totalRevenue - a.totalRevenue)[0]?.totalRevenue > 0 ? (
+                            <>
+                                <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--leaf-700)' }}>{[...dealers].sort((a, b) => b.totalRevenue - a.totalRevenue)[0].name}</div>
+                                <div style={{ fontSize: '0.9rem', color: 'var(--gray-600)', marginTop: '0.2rem' }}>₹{[...dealers].sort((a, b) => b.totalRevenue - a.totalRevenue)[0].totalRevenue.toLocaleString('en-IN')}</div>
+                            </>
+                        ) : <div style={{ color: 'var(--gray-400)', fontSize: '0.85rem' }}>No data yet</div>}
+                    </div>
+                    <div style={{ background: 'white', border: '1px solid var(--gray-200)', borderRadius: '12px', padding: '1.25rem', boxShadow: 'var(--shadow-xs)' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>📦 Most Orders</div>
+                        {[...dealers].sort((a, b) => b.orderCount - a.orderCount)[0]?.orderCount > 0 ? (
+                            <>
+                                <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--leaf-700)' }}>{[...dealers].sort((a, b) => b.orderCount - a.orderCount)[0].name}</div>
+                                <div style={{ fontSize: '0.9rem', color: 'var(--gray-600)', marginTop: '0.2rem' }}>{[...dealers].sort((a, b) => b.orderCount - a.orderCount)[0].orderCount} orders</div>
+                            </>
+                        ) : <div style={{ color: 'var(--gray-400)', fontSize: '0.85rem' }}>No data yet</div>}
+                    </div>
+                    <div style={{ background: 'white', border: '1px solid var(--gray-200)', borderRadius: '12px', padding: '1.25rem', boxShadow: 'var(--shadow-xs)' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>⚠️ Lowest Stock</div>
+                        {[...dealers].sort((a, b) => (b.lowStockCount || 0) - (a.lowStockCount || 0))[0]?.lowStockCount && [...dealers].sort((a, b) => (b.lowStockCount || 0) - (a.lowStockCount || 0))[0].lowStockCount! > 0 ? (
+                            <>
+                                <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#991B1B' }}>{[...dealers].sort((a, b) => (b.lowStockCount || 0) - (a.lowStockCount || 0))[0].name}</div>
+                                <div style={{ fontSize: '0.9rem', color: 'var(--gray-600)', marginTop: '0.2rem' }}>{[...dealers].sort((a, b) => (b.lowStockCount || 0) - (a.lowStockCount || 0))[0].lowStockCount} items &lt; 10 units</div>
+                            </>
+                        ) : <div style={{ color: 'var(--gray-400)', fontSize: '0.85rem' }}>All stocks healthy</div>}
+                    </div>
                 </div>
             )}
 

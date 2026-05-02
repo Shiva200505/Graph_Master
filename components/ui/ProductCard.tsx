@@ -16,6 +16,7 @@ interface ProductCardProps {
     price: number;
     quantity: number;
     basePrice?: number; // for price comparison
+    imageUrl?: string | null;
 }
 
 // Category icon SVGs
@@ -56,7 +57,7 @@ function PriceDisplay({ price, basePrice }: { price: number; basePrice?: number 
 }
 
 export default function ProductCard({
-    id, productId, inventoryId, name, description, category, unit, price, quantity, basePrice,
+    id, productId, inventoryId, name, description, category, unit, price, quantity, basePrice, imageUrl
 }: ProductCardProps) {
     const { addItem, items, updateQuantity, removeItem } = useCartStore();
     const cartItem = items.find((i) => i.productId === productId);
@@ -116,7 +117,20 @@ export default function ProductCard({
                 background: meta.bg,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-                <div style={{ width: '90px', height: '90px', opacity: 0.9 }}
+                {imageUrl ? (
+                    <img 
+                    src={imageUrl} 
+                    alt={name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        if (e.currentTarget.nextElementSibling) {
+                            (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
+                        }
+                    }}
+                    />
+                ) : null}
+                <div style={{ width: '90px', height: '90px', opacity: 0.9, display: imageUrl ? 'none' : 'block' }}
                     dangerouslySetInnerHTML={{ __html: meta.icon }} />
 
                 {/* Stock badge — top left */}
