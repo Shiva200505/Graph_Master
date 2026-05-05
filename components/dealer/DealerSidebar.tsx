@@ -6,8 +6,7 @@ import { useState, useEffect } from 'react';
 const NAV = [
     { href: '/dealer', label: 'Dashboard', icon: '📊' },
     { href: '/dealer/orders', label: 'My Orders', icon: '📦' },
-    { href: '/dealer/inventory', label: 'Inventory', icon: '🌾' },
-    { href: '/dealer/products', label: 'My Products', icon: '📋' },
+    { href: '/dealer/products', label: 'Inventory', icon: '🌾' },
     { href: '/dealer/profile', label: 'My Profile', icon: '👤' },
 ];
 
